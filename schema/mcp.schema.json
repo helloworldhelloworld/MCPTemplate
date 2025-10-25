@@ -1,0 +1,173 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/mcp.schema.json",
+  "title": "Model Context Protocol",
+  "type": "object",
+  "definitions": {
+    "Context": {
+      "type": "object",
+      "properties": {
+        "clientId": { "type": "string" },
+        "requestId": { "type": "string" },
+        "traceId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "locale": { "type": "string" },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "usage": { "$ref": "#/definitions/Usage" }
+      },
+      "required": ["clientId", "requestId", "timestamp"]
+    },
+    "Usage": {
+      "type": "object",
+      "properties": {
+        "inputTokens": { "type": "integer" },
+        "outputTokens": { "type": "integer" },
+        "latencyMs": { "type": "integer" }
+      }
+    },
+    "UiCard": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "body": { "type": "string" },
+        "actions": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+    "StdResponse": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string" },
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "data": {}
+      },
+      "required": ["status", "code"]
+    },
+    "TranslationRequest": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "sourceLanguage": { "type": "string" },
+        "targetLanguage": { "type": "string" }
+      },
+      "required": ["text", "targetLanguage"]
+    },
+    "TranslationResponse": {
+      "type": "object",
+      "properties": {
+        "originalText": { "type": "string" },
+        "translatedText": { "type": "string" },
+        "sourceLanguage": { "type": "string" },
+        "targetLanguage": { "type": "string" }
+      }
+    },
+    "VehicleStateRequest": {
+      "type": "object",
+      "properties": {
+        "vehicleId": { "type": "string" }
+      },
+      "required": ["vehicleId"]
+    },
+    "VehicleStateResponse": {
+      "type": "object",
+      "properties": {
+        "vehicleId": { "type": "string" },
+        "batteryPercentage": { "type": "number" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "QaRequest": {
+      "type": "object",
+      "properties": {
+        "question": { "type": "string" },
+        "context": { "type": "string" }
+      },
+      "required": ["question"]
+    },
+    "QaResponse": {
+      "type": "object",
+      "properties": {
+        "answer": { "type": "string" },
+        "confidence": { "type": "number" }
+      }
+    },
+    "TranscriptionRequest": {
+      "type": "object",
+      "properties": {
+        "audioUri": { "type": "string" },
+        "language": { "type": "string" }
+      },
+      "required": ["audioUri"]
+    },
+    "TranscriptionResponse": {
+      "type": "object",
+      "properties": {
+        "audioUri": { "type": "string" },
+        "transcript": { "type": "string" },
+        "language": { "type": "string" }
+      }
+    },
+    "ToolRequestMap": {
+      "type": "object",
+      "properties": {
+        "mcp.translation.invoke": { "$ref": "#/definitions/TranslationRequest" },
+        "mcp.vehicle.state.get": { "$ref": "#/definitions/VehicleStateRequest" },
+        "mcp.qa.answer.invoke": { "$ref": "#/definitions/QaRequest" },
+        "mcp.audio.transcribe.invoke": { "$ref": "#/definitions/TranscriptionRequest" }
+      },
+      "additionalProperties": {}
+    },
+    "ToolResponseMap": {
+      "type": "object",
+      "properties": {
+        "mcp.translation.invoke": { "$ref": "#/definitions/TranslationResponse" },
+        "mcp.vehicle.state.get": { "$ref": "#/definitions/VehicleStateResponse" },
+        "mcp.qa.answer.invoke": { "$ref": "#/definitions/QaResponse" },
+        "mcp.audio.transcribe.invoke": { "$ref": "#/definitions/TranscriptionResponse" }
+      },
+      "additionalProperties": {}
+    },
+    "RequestEnvelope": {
+      "type": "object",
+      "properties": {
+        "tool": { "type": "string" },
+        "context": { "$ref": "#/definitions/Context" },
+        "payload": {},
+        "attachments": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "required": ["tool", "context"]
+    },
+    "ResponseEnvelope": {
+      "type": "object",
+      "properties": {
+        "tool": { "type": "string" },
+        "context": { "$ref": "#/definitions/Context" },
+        "response": { "$ref": "#/definitions/StdResponse" },
+        "uiCard": { "$ref": "#/definitions/UiCard" }
+      },
+      "required": ["tool", "response"]
+    },
+    "StreamEventEnvelope": {
+      "type": "object",
+      "properties": {
+        "tool": { "type": "string" },
+        "event": { "type": "string" },
+        "emittedAt": { "type": "string", "format": "date-time" },
+        "response": { "$ref": "#/definitions/StdResponse" }
+      },
+      "required": ["tool", "event", "emittedAt"]
+    }
+  }
+}
