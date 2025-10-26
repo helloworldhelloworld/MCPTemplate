@@ -1,16 +1,16 @@
 package com.example.mcp.client.transport;
 
 import io.grpc.CallOptions;
-import io.grpc.ClientCalls;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.MethodDescriptor;
-import io.grpc.stub.ClientCalls.BlockingResponseStream;
+import io.grpc.stub.ClientCalls;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.Iterator;
 import java.util.function.Consumer;
 
 public class GrpcTransport implements Transport {
@@ -36,11 +36,11 @@ public class GrpcTransport implements Transport {
 
   @Override
   public void getSse(String path, Consumer<String> onEvent) {
-    BlockingResponseStream<String> responses =
-        (BlockingResponseStream<String>)
-            ClientCalls.blockingServerStreamingCall(
-                channel, streamMethod, CallOptions.DEFAULT, path);
-    for (String item : responses) {
+    Iterator<String> responses =
+        ClientCalls.blockingServerStreamingCall(
+            channel, streamMethod, CallOptions.DEFAULT, path);
+    while (responses.hasNext()) {
+      String item = responses.next();
       onEvent.accept(item);
     }
   }

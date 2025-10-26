@@ -13,6 +13,9 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import io.opentelemetry.api.trace.Span;
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 
 public class McpClient {
@@ -38,6 +41,34 @@ public class McpClient {
 
   public <TRequest, TResponse> StdResponse<TResponse> invoke(
       String toolName, TRequest requestPayload, Class<TResponse> responseType) throws Exception {
+    String payload = serializeRequest(toolName, requestPayload);
+    String responseJson = transport.postJson("/mcp/invoke", payload);
+    return deserializeResponse(responseJson, responseType);
+  }
+
+  public <TRequest, TResponse> CompletionStage<StdResponse<TResponse>> invokeAsync(
+      String toolName, TRequest requestPayload, Class<TResponse> responseType) {
+    try {
+      String payload = serializeRequest(toolName, requestPayload);
+      return transport
+          .postJsonAsync("/mcp/invoke", payload)
+          .thenApply(
+              responseJson -> {
+                try {
+                  return deserializeResponse(responseJson, responseType);
+                } catch (Exception ex) {
+                  throw new CompletionException(ex);
+                }
+              });
+    } catch (Exception ex) {
+      CompletableFuture<StdResponse<TResponse>> failed = new CompletableFuture<>();
+      failed.completeExceptionally(ex);
+      return failed;
+    }
+  }
+
+  private <TRequest> String serializeRequest(String toolName, TRequest requestPayload)
+      throws Exception {
     RequestEnvelope envelope = new RequestEnvelope();
     envelope.setTool(toolName);
     Context context = buildContext();
@@ -49,8 +80,11 @@ public class McpClient {
       current.setAttribute("tool.name", toolName);
     }
 
-    String payload = objectMapper.writeValueAsString(envelope);
-    String responseJson = transport.postJson("/mcp/invoke", payload);
+    return objectMapper.writeValueAsString(envelope);
+  }
+
+  private <TResponse> StdResponse<TResponse> deserializeResponse(
+      String responseJson, Class<TResponse> responseType) throws Exception {
     JsonNode rootNode = objectMapper.readTree(responseJson);
     if (rootNode.has("status")) {
       JavaType stdType =

@@ -1,0 +1,20 @@
+{
+  "clientId": "demo-client",
+  "defaultServer": "local-http",
+  "servers": {
+    "local-http": {
+      "type": "HTTP",
+      "baseUrl": "http://localhost:8080",
+      "interceptors": [
+        {
+          "className": "com.example.mcp.client.interceptor.TraceInterceptor"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "vehicleState": {
+      "tool": "mcp.vehicle.state.get"
+    }
+  }
+}
