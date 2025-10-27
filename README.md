@@ -1,140 +1,113 @@
 # MCP Template
 
-> This README provides a bilingual view of the repository. The English portion gives newcomers a quick architectural snapshot, while the Chinese section保留本地化的业务解读，便于团队同步协议思路。
-
-- [English Overview](#english-overview)
-- [中文概览](#中文概览)
-
-## English Overview
-
-### Project Scope
-This repository demonstrates an end-to-end Model Context Protocol (MCP) workflow that spans the model-facing client runtime and the Spring Boot tool server. The multi-module Maven layout isolates shared contracts, server orchestration, client runtime, and JSON Schema definitions so that individual teams can evolve capabilities independently.【F:mcp-common/src/main/java/com/example/mcp/common/Context.java†L11-L124】【F:mcp-server/src/main/java/com/example/mcp/server/controller/McpController.java†L34-L111】【F:mcp-client/src/main/java/com/example/mcp/client/McpClient.java†L21-L119】
+## 项目定位
+本仓库实现了一个完整的 Model Context Protocol（MCP）业务链路示例，展示了「模型客户端 ↔ MCP 工具服务端」的协同方式。代码采用多模块 Maven 结构，将共享协议、服务端工具编排、客户端运行时和 JSON Schema 分层管理，便于团队独立演进各个能力域。
 
 ```
 root
-├── mcp-common   # DTOs, envelopes, shared context
-├── mcp-server   # Spring Boot MCP tool server
-├── mcp-client   # Configurable Java MCP client runtime
-└── schema       # Unified JSON Schema contracts
+├── mcp-common   # 协议与上下文模型（DTO、Envelope 等）
+├── mcp-server   # Spring Boot 实现的 MCP 工具服务端
+├── mcp-client   # 可配置的 Java MCP 客户端运行时
+└── schema       # 统一的 JSON Schema 定义
 ```
 
-### MCP Protocol Four-Layer Architecture
-The MCP specification can be read as four logical layers that decouple connection management, capability discovery, invocation orchestration, and runtime governance. Keeping these layers explicit helps translation, vehicle control, or any other tool plug in without leaking implementation details.
+## 业务架构总览
+从业务视角看，MCP 模板围绕「请求编排 → 工具执行 → 结果回传」的闭环展开：
 
-| Layer | Focus | Key Artifacts | Primary Methods | Responsibilities |
-| --- | --- | --- | --- | --- |
-| L1 Session & Transport | Establish bidirectional channels and negotiate shared context | `Session`, `Context`, heartbeats | `session.create`, `ping` | Owns connection handshake, identity, sequencing, locale, and tracing metadata. |
-| L2 Capability Discovery | Advertise callable tools and their constraints | `Tool`, `Schema`, `Resource` | `list_tools`, `describe_tool`, `list_resources` | Publishes tool catalogues, payload schemas, and permission hints. |
-| L3 Invocation Orchestration | Execute concrete tool calls via unified envelopes | `RequestEnvelope`, `ResponseEnvelope`, `StreamEventEnvelope` | `call_tool`, `stream_events` | Normalises payload submission, streaming progress, and UI card packaging. |
-| L4 Observability & Control | Guarantee the run is observable and governable | `Usage`, `StdResponse`, cancellation tokens | `report_usage`, `cancel_call`, custom events | Captures metrics, error semantics, and cancellation signals for closed-loop control. |
+1. **渠道层（客户端运行时）**：负责接入外部触发（事件、API 调用或 SDK 集成），并将业务请求转换为标准化的 MCP Envelope。
+2. **协议层（共享模型）**：`mcp-common` 输出上下文、请求、响应等标准模型，确保客户端与服务端在业务语义、鉴权信息、追踪标识上保持一致。【F:mcp-common/src/main/java/com/example/mcp/common/Context.java†L11-L124】【F:mcp-common/src/main/java/com/example/mcp/common/StdResponse.java†L8-L69】
+3. **服务编排层（MCP 服务端）**：`mcp-server` 接收请求、完成鉴权与观测、路由到具体工具，并根据业务场景封装响应或卡片信息。【F:mcp-server/src/main/java/com/example/mcp/server/controller/McpController.java†L34-L111】
+4. **工具能力层（工具处理器）**：每个业务工具实现 `ToolHandler` 接口，聚焦自身领域逻辑，例如翻译、问答、车机状态查询等，并在 `Context` 中沉淀用量指标供后续计费或分析。【F:mcp-server/src/main/java/com/example/mcp/server/handler/ToolHandler.java†L7-L12】【F:mcp-server/src/main/java/com/example/mcp/server/handler/VehicleStateGetHandler.java†L11-L76】
 
-### Translation Flow Across the Four Layers
-1. **Session bootstrap (L1)** – The client issues `session.create` with supported protocol version, preferred locale (for instance `zh-CN`), and tracing IDs. The server acknowledges, returning a session token and baseline context that will be reused in every envelope.
-2. **Tool discovery (L2)** – The client invokes `list_tools` to learn about the `translation` capability, then calls `describe_tool` to fetch JSON Schema that specifies `payload.sourceText`, `payload.targetLocale`, allowed language codes, and maximum text length. Validation happens client-side before any call is issued.
-3. **Request execution (L3)** – The client composes a `RequestEnvelope` where `payload.sourceText="你好，世界"` and `payload.targetLocale="en-US"`. If the job takes time, the server emits `stream_events` such as `{event:"progress", message:"loading"}` before delivering a `ResponseEnvelope` with `StdResponse.status=SUCCESS`, the translated text, and an optional UI card that exposes a “Copy” action.
-4. **Runtime governance (L4)** – The final response reports `Usage.inputTokens`, `outputTokens`, and `latencyMs`. If latency exceeds the SLA, the client may call `cancel_call`; the server publishes a terminal event `{event:"cancelled"}` and marks `StdResponse.code="TRANSLATION_TIMEOUT"` so monitoring pipelines can flag the incident.
+这种分层使 MCP 方案既能以最小改动嵌入现有业务系统，又能灵活扩展新的模型工具或渠道。
 
-This layered perspective makes it straightforward to mirror the same lifecycle for other domains (for example vehicle telemetry or control) by reusing the protocol contracts at each layer.
+## 协议定义与设计
+协议层通过统一的数据包结构让客户端与服务端在语义、鉴权、观测上对齐。以下类图描绘了核心 Envelope 模型的字段与引用关系：
 
-### Embedded MCP Protocol Manual
-> The accordion below mirrors the canonical reference stored in [docs/mcp-protocol.md](docs/mcp-protocol.md), keeping the protocol summary close at hand for reviewers.
+```mermaid
+classDiagram
+    class Context {
+        +String clientId
+        +String requestId
+        +String traceId
+        +OffsetDateTime timestamp
+        +String locale
+        +Map<String,String> metadata
+        +Usage usage
+    }
+    class Usage {
+        +Integer inputTokens
+        +Integer outputTokens
+        +Long latencyMs
+    }
+    class StdResponse {
+        +String status
+        +String code
+        +String message
+        +T data
+    }
+    class UiCard {
+        +String title
+        +String subtitle
+        +String body
+        +Map<String,String> actions
+    }
+    class RequestEnvelope {
+        +String tool
+        +Context context
+        +JsonNode payload
+        +Map<String,String> attachments
+    }
+    class ResponseEnvelope {
+        +String tool
+        +Context context
+        +StdResponse response
+        +UiCard uiCard
+    }
+    class StreamEventEnvelope {
+        +String tool
+        +String event
+        +OffsetDateTime emittedAt
+        +StdResponse response
+    }
+    RequestEnvelope --> Context
+    ResponseEnvelope --> Context
+    ResponseEnvelope --> StdResponse
+    ResponseEnvelope --> UiCard
+    StreamEventEnvelope --> StdResponse
+    Context --> Usage
+```
 
-<details open>
-<summary>Expand MCP protocol quick reference</summary>
+* **上下文模型**：`Context` 与内部的 `Usage` 统一封装调用标识、追踪信息与消耗指标，是所有 Envelope 的必备元数据。【F:mcp-common/src/main/java/com/example/mcp/common/Context.java†L11-L124】
+* **标准响应**：`StdResponse` 约定了跨工具的状态码、错误信息与泛型数据体，为服务端工具提供一致的返回包装。【F:mcp-common/src/main/java/com/example/mcp/common/StdResponse.java†L8-L69】
+* **信封结构**：`Envelopes` 工具类定义了请求、响应、流式事件三种包装形态，并支持附带 UI 卡片、附件等扩展字段，确保不同传输协议仍共享统一语义。【F:mcp-common/src/main/java/com/example/mcp/common/Envelopes.java†L11-L226】
+* **Schema 对齐**：`schema/mcp.schema.json` 将上述模型转化为 JSON Schema，明确字段类型、必填约束及不同工具的 Payload 结构，方便前后端、第三方在接口层面进行契约校验。【F:schema/mcp.schema.json†L1-L171】
 
-<!-- MCP_PROTOCOL:START -->
 
-# MCP 协议参考
+## 服务端业务视角
+服务端以 Spring Boot 启动 `McpServerApplication`，暴露 `/mcp/invoke`（处理工具调用）与 `/mcp/stream`（推送流式事件）两个核心入口。【F:mcp-server/src/main/java/com/example/mcp/server/McpServerApplication.java†L1-L11】【F:mcp-server/src/main/java/com/example/mcp/server/controller/McpController.java†L34-L111】
 
-本文聚焦 Model Context Protocol（MCP）的协议分层与交互流程，按照**四层模型**拆解会话、能力、调用与观测控制，帮助读者在没有具体代码背景的情况下理解协议如何组织一次工具调用的生命周期。
+* **统一鉴权**：`HmacAuthFilter` 校验客户端基于共享密钥生成的 HMAC 签名，确保所有业务调用具备来源可信度。【F:mcp-server/src/main/java/com/example/mcp/server/security/HmacAuthFilter.java†L21-L101】
+* **全链路追踪**：`TracingFilter` 将 HTTP 请求与 OpenTelemetry span 关联，把 clientId、toolName 等标签沉淀，支撑故障追踪与 SLA 分析。【F:mcp-server/src/main/java/com/example/mcp/server/tracing/TracingFilter.java†L21-L79】
+* **工具编排**：`McpController` 基于 `ToolRegistry` 查找业务工具，完成请求模型转换、上下文补全、卡片渲染与 SSE 心跳发送，实现对多种业务能力的统一编排。【F:mcp-server/src/main/java/com/example/mcp/server/controller/McpController.java†L42-L108】
+* **领域工具**：`TranslationInvokeHandler`、`VehicleStateGetHandler` 等处理器专注于领域逻辑：读取业务参数、模拟外部系统查询、封装 `StdResponse` 并回写到上下文，形成可扩展的工具目录。【F:mcp-server/src/main/java/com/example/mcp/server/handler/TranslationInvokeHandler.java†L11-L63】【F:mcp-server/src/main/java/com/example/mcp/server/handler/VehicleStateGetHandler.java†L11-L76】
 
-## 四层模型总览
+## 客户端业务视角
+客户端扮演渠道聚合与调用编排角色：
 
-| 层级 | 关注点 | 关键对象 | 核心方法 | 说明 |
-| --- | --- | --- | --- | --- |
-| L1 连接与会话层 | 建立双向通道并协商基础上下文 | `Session`, `Context`, 心跳 | `session.create`, `ping` | 负责连接握手、身份标识、时序与本地化等跨调用信息。 |
-| L2 能力发现层 | 暴露可调用的工具与资源 | `Tool`, `Schema`, `Resource` | `list_tools`, `list_resources`, `describe` | 确定可用工具、输入输出约束以及资源定位方式。 |
-| L3 调用编排层 | 发起与执行具体工具调用 | `RequestEnvelope`, `ResponseEnvelope`, `Payload` | `call_tool`, `stream_events` | 处理结构化请求、结果返回及长任务流式事件。 |
-| L4 观测与控制层 | 保障执行可控、可观测 | `Usage`, `StdResponse`, `CancelToken` | `report_usage`, `cancel_call`, 事件通道 | 追踪消耗、错误语义与取消动作，形成闭环治理。 |
+* **核心调用器**：`McpClient` 负责将业务事件封装为 `RequestEnvelope`、注入追踪上下文，并解析标准响应。它同时支持同步调用、异步 Future、SSE 订阅等模式，满足多终端需求。【F:mcp-client/src/main/java/com/example/mcp/client/McpClient.java†L21-L119】
+* **多样化传输**：通过 `Transport` 接口抽象 HTTP、gRPC、SDK 等协议，实现对不同服务部署形态的无感切换。`HttpTransport`、`GrpcTransport`、`SdkTransport` 分别对应企业常见的网络形态。【F:mcp-client/src/main/java/com/example/mcp/client/transport/Transport.java†L1-L32】【F:mcp-client/src/main/java/com/example/mcp/client/transport/HttpTransport.java†L17-L71】【F:mcp-client/src/main/java/com/example/mcp/client/transport/GrpcTransport.java†L17-L86】【F:mcp-client/src/main/java/com/example/mcp/client/transport/SdkTransport.java†L7-L47】
+* **安全与观测扩展**：客户端侧的 `HmacAuthInterceptor`、`TraceInterceptor` 通过 OkHttp 拦截器注入签名与链路标识，使每一次工具调用都可定位、可审计。【F:mcp-client/src/main/java/com/example/mcp/client/interceptor/HmacAuthInterceptor.java†L13-L61】【F:mcp-client/src/main/java/com/example/mcp/client/interceptor/TraceInterceptor.java†L15-L43】
+* **配置驱动路由**：`McpClientConfig`/`TransportFactory` 以 JSON 配置描述可用服务、路由规则和需要挂载的拦截器；`McpClientEnvironment` + `McpRouteDispatcher` 则根据配置监听事件、分发至指定工具，形成高度可配置的编排引擎。【F:mcp-client/src/main/java/com/example/mcp/client/config/McpClientConfig.java†L1-L52】【F:mcp-client/src/main/java/com/example/mcp/client/config/TransportFactory.java†L1-L92】【F:mcp-client/src/main/java/com/example/mcp/client/runtime/McpClientEnvironment.java†L1-L43】【F:mcp-client/src/main/java/com/example/mcp/client/runtime/McpRouteDispatcher.java†L1-L132】
+* **示例流程**：`ClientDemo` 演示如何读取配置、注册路由并调用 `vehicleState` 工具，帮助业务方快速验证整条链路。【F:mcp-client/src/main/java/com/example/mcp/client/demo/ClientDemo.java†L1-L46】
 
-下文逐层展开，并以“文本翻译”这一典型工具为例，说明模型客户端如何沿 MCP 流程完成一次调用。
+## 端到端业务流程
+以下流程串联起业务调用的关键触点：
 
-## L1 连接与会话层
+1. 渠道方（如对话系统）通过 `McpRouteClient` 发布 `vehicleState.request` 等事件，请求上下文带有 clientId、traceId 等业务标识。【F:mcp-client/src/main/java/com/example/mcp/client/runtime/McpRouteClient.java†L1-L94】
+2. `McpRouteDispatcher` 根据配置选择目标服务器与传输协议，完成请求模型转换后调用 `McpClient` 发起工具执行。【F:mcp-client/src/main/java/com/example/mcp/client/runtime/McpRouteDispatcher.java†L55-L132】
+3. 服务端 `McpController` 校验签名、记录追踪信息，并委派给匹配的 `ToolHandler` 执行业务逻辑，产出标准化的 `StdResponse`。【F:mcp-server/src/main/java/com/example/mcp/server/controller/McpController.java†L60-L108】
+4. 响应封装成 `Envelopes.ResponseEnvelope`，必要时通过 `Envelopes.StreamEventEnvelope` 推送 UI 卡片或增量事件，经由选定的传输（HTTP/gRPC/SDK）返回给客户端。【F:mcp-common/src/main/java/com/example/mcp/common/Envelopes.java†L61-L153】
+5. 客户端收到响应后向事件总线发布 `*.response`，消费者可以同步等待结果或订阅 SSE 以接收持续更新，形成自闭环反馈。【F:mcp-client/src/main/java/com/example/mcp/client/event/McpEventBus.java†L1-L49】
 
-- **目标**：建立模型客户端与工具服务端之间的可靠通道，协商基础上下文。
-- **载体**：`session.create`/`session.open` 等会话初始化方法，配合心跳或 `ping` 保活。
-- **Context 字段**：`clientId`、`sessionId`、`locale`、`metadata`、`traceId`、`timestamp`。
-
-> 翻译示例：客户端首先发起会话创建，请求中声明支持的协议版本、语言偏好（如 `zh-CN`）及追踪 ID。服务端确认后返回会话令牌与默认的区域设置，为后续请求提供统一的上下文基线。
-
-会话层约束所有后续 Envelope 携带相同或扩展的 `Context`，确保跨层追踪一致；若采用长连接，还需要约定心跳频率与超时策略。
-
-## L2 能力发现层
-
-- **目标**：明确可调用的工具能力、参数签名与 Schema。
-- **方法族**：
-  - `list_tools` 返回工具清单（如 `translation`, `vehicle_control`），包含描述、版本及所需权限。
-  - `describe_tool` 或扩展 `list_resources` 返回更细的字段定义、枚举范围及示例负载。
-  - `fetch_schema`（可选）提供 JSON Schema，供客户端做静态校验。
-- **Schema 内容**：公共部分约定 `Context`、`StdResponse`、`Usage`，工具特定部分描述 `payload` 的结构与约束。
-
-> 翻译示例：客户端调用 `list_tools`，获得 `translation` 工具，附带支持的语种列表、最大文本长度等。随后调用 `describe_tool(translation)`，获取 JSON Schema，确认 `payload.sourceText`、`payload.targetLocale` 等字段要求。
-
-能力层使得客户端能够在正式调用前完成参数验证与权限检查，并可根据 Schema 生成表单或提示词模板。
-
-## L3 调用编排层
-
-- **目标**：按统一 Envelope 提交请求、接收响应，并支持流式事件。
-- **RequestEnvelope**：包含目标 `tool`、`Context` 与结构化 `payload`，可附带 `attachments`（如语音文件）。
-- **ResponseEnvelope**：返回 `StdResponse`、可选的 `UiCard`、以及更新后的 `Context`。
-- **StreamEventEnvelope**：服务端在长任务期间推送阶段性状态或中间结果。
-
-> 翻译示例：
-> 1. 客户端构造 `RequestEnvelope`，`payload` 指定 `sourceText="你好，世界"`、`targetLocale="en-US"`。
-> 2. 若翻译服务需要准备模型，服务端通过 `stream_events` 推送 `{event:"progress", message:"loading"}`。
-> 3. 完成后返回 `ResponseEnvelope`，`StdResponse.status=SUCCESS`，`data.translatedText="Hello, world"`，并附带 `UiCard` 展示译文及“复制”操作。
-
-调用层强调幂等性：`Context.requestId` 作为幂等键，重复请求需返回同一结果；`payload` 的字段必须满足 L2 约定的 Schema。
-
-## L4 观测与控制层
-
-- **目标**：在调用执行期间提供可观测性、错误语义及控制手段。
-- **Usage 追踪**：`Usage.inputTokens`、`outputTokens`、`latencyMs` 等指标写入响应，供计费或 SLA 分析。
-- **错误语义**：`StdResponse.status` 区分 `SUCCESS`、`FAILED`、`PROCESSING`，`code` 承载业务错误码，`message` 面向人类可读解释。
-- **取消与补偿**：`cancel_call` 携带会话和请求标识，通知服务端中断长任务；必要时返回最终状态事件。
-- **遥测通道**：可扩展自定义事件（如 `usage.report`）上报详细的模型开销或链路追踪信息。
-
-> 翻译示例：翻译任务如果超过 5 秒，客户端可调用 `cancel_call`，服务端响应 `StreamEventEnvelope` `{event:"cancelled"}` 并在最终 `StdResponse` 中写入 `status=FAILED`、`code="TRANSLATION_TIMEOUT"`。同时，`Usage.latencyMs` 记录已消耗时间，便于后续定位瓶颈。
-
-## 端到端流程回顾
-
-1. **会话建立（L1）**：协商协议版本、区域设置与追踪 ID。
-2. **能力发现（L2）**：通过 `list_tools`/`describe_tool` 获取翻译工具的 Schema。
-3. **调用执行（L3）**：提交翻译请求，接收流式进度与最终响应。
-4. **观测控制（L4）**：收集 usage、错误码，并在必要时取消或补偿。
-
-这一分层模型将协议语义与实现解耦，客户端和服务端只需遵守同一层级的契约即可独立演进；同时翻译、车控等不同工具也能沿相同流程快速接入。
-
-<!-- MCP_PROTOCOL:END -->
-
-</details>
-
-## 中文概览
-
-### 项目定位
-该模板演示如何在 Java 生态内实现端到端的 Model Context Protocol（MCP）流程：客户端运行时负责与模型对接，工具服务端以 Spring Boot 提供翻译、车控等工具，`mcp-common` 则沉淀共享契约，`schema` 目录维护 JSON Schema，方便多团队协作演进。【F:mcp-client/src/main/java/com/example/mcp/client/runtime/McpRouteDispatcher.java†L1-L132】【F:mcp-server/src/main/java/com/example/mcp/server/handler/VehicleStateGetHandler.java†L11-L76】【F:schema/mcp.schema.json†L1-L171】
-
-### MCP 协议四层拆解
-- **L1 连接与会话层**：处理 `session.create`、心跳与基础 `Context` 协商，确保所有消息共享同一追踪与本地化语境。
-- **L2 能力发现层**：通过 `list_tools`、`describe_tool`、`list_resources` 发布可用工具及其 Schema，客户端据此完成参数校验。
-- **L3 调用编排层**：围绕 `RequestEnvelope`、`ResponseEnvelope`、`StreamEventEnvelope` 统一请求、响应与长任务事件模型。
-- **L4 观测与控制层**：利用 `Usage`、`StdResponse`、取消令牌等机制沉淀耗时、错误码与中断协议，保证运行治理闭环。
-
-### 翻译工具端到端流程
-1. **会话建立（L1）**：客户端创建会话并声明偏好语言，服务端确认后返回会话令牌。
-2. **能力发现（L2）**：客户端列举并描述 `translation` 工具，读取 JSON Schema 了解参数范围。
-3. **调用执行（L3）**：客户端提交包含源文本与目标语言的 `RequestEnvelope`，服务端视耗时情况推送进度并返回标准响应与 UI 卡片。
-4. **观测控制（L4）**：响应中附带 `Usage` 指标；若延迟过长，客户端触发 `cancel_call`，服务端终止任务并返回带错误码的最终状态。
-
-### 协议参考手册
-更多细节请展开上方折叠面板或直接访问 [docs/mcp-protocol.md](docs/mcp-protocol.md)。
+通过上述链路，团队可以在不改变原有业务系统的前提下，快速插入新的模型工具能力，并确保鉴权、追踪、配置等横切需求一次构建、全局复用。
