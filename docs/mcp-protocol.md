@@ -1,72 +1,63 @@
-# MCP 协议参考
+# MCP 协议参考（结合模板实践）
 
-本文聚焦 Model Context Protocol（MCP）本身的约定与数据结构，帮助读者在没有具体代码背景的情况下理解协议如何组织一次工具调用的生命周期。
+本章节梳理 Model Context Protocol（MCP）的核心概念，并映射到本仓库的具体实现，方便业务团队在落地时对照协议条目与代码。
 
-## 协议参与方
-- **模型客户端（Model Runtime）**：代表模型或上游应用，负责发起工具调用、订阅事件流、对响应做语义理解。
-- **工具服务端（Tool Server）**：承接模型请求，完成鉴权、调度具体工具，并将结果封装成标准响应。
-- **共享契约层（Contracts）**：约定上下文字段、数据包形态与错误语义，确保任意客户端与服务端都能按统一格式通信。
+## 协议角色与职责
+- **模型客户端（Model Runtime）**：触发工具调用、订阅事件流，映射到 `mcp-client` 模块中的 `McpClient` 与路由调度体系。【F:mcp-client/src/main/java/com/example/mcp/client/McpClient.java†L21-L119】【F:mcp-client/src/main/java/com/example/mcp/client/runtime/McpRouteDispatcher.java†L1-L132】
+- **工具服务端（Tool Server）**：承接模型请求、执行业务逻辑、返回标准化响应，对应 `mcp-server` 模块的 `McpController` 及各类 `ToolHandler`。【F:mcp-server/src/main/java/com/example/mcp/server/controller/McpController.java†L34-L111】【F:mcp-server/src/main/java/com/example/mcp/server/handler/ToolHandler.java†L7-L12】
+- **共享协议层（Common Contracts）**：定义上下文、Envelope、响应规范，支撑客户端与服务端的契约统一，由 `mcp-common` 模块提供。【F:mcp-common/src/main/java/com/example/mcp/common/Context.java†L11-L124】【F:mcp-common/src/main/java/com/example/mcp/common/Envelopes.java†L11-L226】
 
-## 调用上下文
-所有请求都通过 `Context` 携带调用标识与运行时元数据：
+## 建立调用上下文
+MCP 要求所有请求在 Envelope 中携带追踪、鉴权等上下文字段。本模板通过 `Context` 统一封装：
 
-- `clientId`、`requestId`、`traceId`：用于追踪、去重与链路串联。
-- `timestamp`：ISO-8601 时间戳，保证参与方在时序上的一致性。
-- `locale`、`metadata`：面向多语言、多租户等扩展场景的开放字段。
-- `usage`：记录 token、延迟等消耗指标，可供计费或 SLA 评估。
+- `clientId` / `requestId` / `traceId`：用于端到端追踪及去重。
+- `timestamp`：ISO-8601 时间戳，对齐协议对时序一致性的要求。
+- `metadata`：扩展字典，推荐放置渠道、租户、用户等自定义信息。
+- `usage`：记录 token、延迟等计量指标，方便计费结算或 SLA 计算。
 
-客户端在发起请求时写入上述信息，服务端在响应中补充或更新 `usage` 等指标，形成端到端透传。
+服务端在处理完工具逻辑后会写回 `usage`，客户端则在响应中读取，形成双向透传。【F:mcp-common/src/main/java/com/example/mcp/common/Context.java†L25-L121】【F:mcp-server/src/main/java/com/example/mcp/server/handler/VehicleStateGetHandler.java†L63-L73】
 
-## Envelope 形态
-MCP 通过统一的 Envelope 抽象不同阶段的消息：
+## 数据包与方法族
+MCP 官方协议将交互抽象为若干方法族，本模板通过 `Envelopes` 提供等价实现：
 
-- **RequestEnvelope**：封装 `tool` 名称、`Context` 与结构化 `payload`，代表一次工具调用的输入。
-- **ResponseEnvelope**：携带 `StdResponse` 与可选的 `UiCard`，用于返回最终结果及界面展示数据。
-- **StreamEventEnvelope**：面向长任务或实时推送，包含事件类型、时间戳以及阶段性响应内容。
+| 协议方法 | 对应 Envelope | 典型用途 | 模板入口 |
+| --- | --- | --- | --- |
+| `call_tool` | `RequestEnvelope` | 模型请求执行具体工具 | `McpClient.invoke` ➜ `/mcp/invoke` | 
+| `stream_events` | `StreamEventEnvelope` | 推送增量结果、心跳或状态同步 | 服务端 SSE `/mcp/stream` |
+| `list_tools` | `StdResponse<List<ToolDescriptor>>` | 客户端发现工具能力 | `McpController.listTools`（可扩展） |
 
-这些 Envelope 保持字段一致，使 HTTP、gRPC、WebSocket 等传输层可以复用相同的序列化结构。
-
-## 方法族与交互流程
-MCP 将交互拆分为一组方法族：
-
-1. `list_tools`：客户端发现工具能力与参数签名。
-2. `call_tool`：提交结构化负载，请求执行指定工具。
-3. `stream_events`：订阅工具执行过程中的增量事件或心跳。
-4. `cancel_call`：在需要时撤销长时间运行的调用。
-
-以翻译或车控场景为例：
-
-- 客户端先调用 `list_tools` 获知 `translation`、`vehicleState` 等工具支持的字段与语言范围。
-- 调用 `call_tool` 时，`payload` 中携带翻译的源文本、目标语言，或车辆 VIN、查询参数等业务信息。
-- 若工具执行耗时，服务端可通过 `stream_events` 推送阶段性状态（如“翻译进度 50%”、“车辆状态读取中”），最终由 `ResponseEnvelope` 给出完整结果或 UI 卡片。
+`RequestEnvelope` 必须包含 `tool`、`context` 和 `payload`，其中 `payload` 结构需遵循 `schema/mcp.schema.json` 中对应工具的 JSON Schema。【F:mcp-common/src/main/java/com/example/mcp/common/Envelopes.java†L43-L86】【F:schema/mcp.schema.json†L54-L146】
 
 ## JSON Schema 契约
-协议推荐使用 JSON Schema 描述工具的入参、出参：
+为了让模型侧能够在调用前理解参数结构，MCP 依赖 JSON Schema 描述工具输入输出。本仓库的 `schema/mcp.schema.json`：
 
-- 公共部分定义 `Context`、`Usage`、`StdResponse` 等基础组件。
-- 每个工具声明自身 `payload` 的必填字段、类型范围和枚举值（例如翻译的语言代码、车控的控制指令列表）。
-- Schema 可被客户端用于本地校验，也可在服务端对入参做二次验证，确保双方对契约达成共识。
+1. 定义公共组件（`Context`, `Usage`, `StdResponse`）。
+2. 对每个工具（如 `vehicleState`、`translation`）声明 `payload` 属性与校验规则。
+3. 支持 `oneOf` 扩展，便于不同工具组合共存。
 
-## UI 卡片与展示
-`UiCard` 对象封装标题、副标题、正文和交互动作，便于将 MCP 响应直接映射到前端或车载屏幕。例如：
+客户端在启动时可以加载 Schema 进行本地校验，而服务端可用同一份 Schema 对入参做二次验证，确保契约一致。【F:schema/mcp.schema.json†L1-L171】
 
-- 翻译结果卡片可以展示源文本、译文以及“复制”操作。
-- 车控查询卡片可罗列车辆状态、剩余续航，并附带“刷新”“预约保养”等动作。
+## 流式事件与 UI 卡片
+MCP 允许服务端主动推送中间态或最终展示信息：
 
-## 错误语义与幂等
-`StdResponse` 通过 `status`、`code`、`message`、`data` 四个字段表达结果：
+- `StreamEventEnvelope`：通过 `event` 字段区分事件类型，例如 `progress`, `completion`, `heartbeat`。
+- `UiCard`：封装标题、副标题、正文与交互动作，帮助渠道快速渲染标准化界面。
 
-- `status` 区分 `SUCCESS`、`FAILED`、`PROCESSING` 等状态。
-- `code` 承载业务错误码，便于客户端根据语义采取补偿措施。
-- `message` 面向人类可读说明，`data` 存放结构化结果或错误细节。
+`mcp-server` 的工具处理器可以在执行过程中发布 `StreamEventEnvelope`，客户端通过 SSE/订阅模式接收并转发到事件总线，实现实时体验。【F:mcp-common/src/main/java/com/example/mcp/common/Envelopes.java†L123-L214】【F:mcp-client/src/main/java/com/example/mcp/client/event/McpEventBus.java†L1-L49】
 
-协议鼓励将 `requestId` 作为幂等键；若客户端重复发送同一请求，服务端可直接返回已缓存的响应，减少重复计算。
+## 错误处理与幂等
+协议推荐使用统一的状态码与错误结构，以便模型或上游系统根据 `status`、`code` 进行兜底或重试。本模板提供：
+
+- `StdResponse.status`：`SUCCESS` / `FAILED` / `PROCESSING` 等状态枚举。
+- `StdResponse.code`：对齐业务自定义错误码（如 `TOOL_NOT_FOUND`）。
+- `Context.requestId`：作为幂等键，服务端遇到重复请求可直接返回缓存结果。
+
+此外，所有异常都会封装为 `StdResponse` 返回，避免裸露堆栈信息。【F:mcp-common/src/main/java/com/example/mcp/common/StdResponse.java†L8-L69】【F:mcp-server/src/main/java/com/example/mcp/server/controller/McpController.java†L78-L108】
 
 ## 鉴权与观测
-MCP 不强制某种安全方案，但推荐：
+MCP 协议本身不约束鉴权方式，但建议在 Envelope 元数据中传递必要信息。本模板提供：
 
-- 在 `Context.metadata` 中附带签名信息或租户标识，实现自定义鉴权。
-- 使用开放式追踪 ID（如 W3C Trace Context）串联调用链路。
-- 将 `usage` 与事件时间戳写回响应，以便观测平台统计性能与成功率。
+- **HMAC 鉴权**：客户端通过 `HmacAuthInterceptor` 生成签名，服务端 `HmacAuthFilter` 校验，保障调用合法性。【F:mcp-client/src/main/java/com/example/mcp/client/interceptor/HmacAuthInterceptor.java†L13-L61】【F:mcp-server/src/main/java/com/example/mcp/server/security/HmacAuthFilter.java†L21-L101】
+- **Tracing**：使用 `TraceInterceptor` 与 `TracingFilter` 将 `traceId` 注入 OpenTelemetry Span，满足跨系统链路追踪需求。【F:mcp-client/src/main/java/com/example/mcp/client/interceptor/TraceInterceptor.java†L15-L43】【F:mcp-server/src/main/java/com/example/mcp/server/tracing/TracingFilter.java†L21-L79】
 
-通过以上约定，任意模型客户端都能在不共享内部实现细节的情况下，与不同领域的工具（翻译、车控、知识库等）建立稳定、可演进的集成关系。
+通过以上条目，团队可以快速将 MCP 官方协议要求与本模板实现对号入座，在扩展新工具或对接其他模型客户端时保持一致的协议语义。
