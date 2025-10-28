@@ -8,22 +8,12 @@ import org.junit.jupiter.api.Test;
 class StdResponseTest {
 
   @Test
-  void successResponsePopulatesFields() {
-    StdResponse<String> response = StdResponse.success("CODE", "All good", "payload");
+  void clarifyResponseUsesClarifyStatus() {
+    StdResponse<String> response = StdResponse.clarify("NEED_INFO", "请补充信息", null);
 
-    assertEquals("success", response.getStatus());
-    assertEquals("CODE", response.getCode());
-    assertEquals("All good", response.getMessage());
-    assertEquals("payload", response.getData());
-  }
-
-  @Test
-  void errorResponseLeavesDataNull() {
-    StdResponse<Void> response = StdResponse.error("ERR", "Failure");
-
-    assertEquals("error", response.getStatus());
-    assertEquals("ERR", response.getCode());
-    assertEquals("Failure", response.getMessage());
+    assertEquals("clarify", response.getStatus());
+    assertEquals("NEED_INFO", response.getCode());
+    assertEquals("请补充信息", response.getMessage());
     assertNull(response.getData());
   }
 }
