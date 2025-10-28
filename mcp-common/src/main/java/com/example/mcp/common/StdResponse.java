@@ -35,6 +35,19 @@ public class StdResponse<T> implements Serializable {
     return response;
   }
 
+  public static <T> StdResponse<T> clarify(String code, String message) {
+    return clarify(code, message, null);
+  }
+
+  public static <T> StdResponse<T> clarify(String code, String message, T data) {
+    StdResponse<T> response = new StdResponse<>();
+    response.setStatus("clarify");
+    response.setCode(code);
+    response.setMessage(message);
+    response.setData(data);
+    return response;
+  }
+
   public String getStatus() {
     return status;
   }

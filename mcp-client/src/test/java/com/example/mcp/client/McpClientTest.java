@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.verify;
 
 import com.example.mcp.client.transport.Transport;
 import com.example.mcp.common.StdResponse;
@@ -79,9 +80,32 @@ class McpClientTest {
     McpClient client = new McpClient("client-1", transport, new ObjectMapper());
     AtomicReference<String> captured = new AtomicReference<>();
 
-    client.subscribeStream("/mcp/stream", captured::set);
+    client.subscribeStream(captured::set);
 
-    Mockito.verify(transport).getSse(eq("/mcp/stream"), any());
+    verify(transport).getSse(eq("/mcp/stream"), any());
+  }
+
+  @Test
+  void customPathsAreRespected() throws Exception {
+    Transport transport = Mockito.mock(Transport.class);
+    Mockito
+        .when(transport.postJson(eq("/api/mcp/invoke"), any()))
+        .thenReturn(
+            "{\"status\":\"success\",\"code\":\"OK\",\"message\":\"done\",\"data\":{}}"
+                );
+
+    McpClient client =
+        new McpClient(
+            "client-1", transport, new ObjectMapper(), "/api/mcp/invoke", "/api/mcp/stream");
+
+    try (MockedStatic<Span> spanMock = Mockito.mockStatic(Span.class)) {
+      spanMock.when(Span::current).thenReturn(null);
+      client.invoke("tool.name", new RequestPayload("hello"), ResponsePayload.class);
+    }
+    client.subscribeStream(null, __ -> {});
+
+    verify(transport).postJson(eq("/api/mcp/invoke"), any());
+    verify(transport).getSse(eq("/api/mcp/stream"), any());
   }
 
   private static class RequestPayload {
