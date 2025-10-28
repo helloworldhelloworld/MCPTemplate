@@ -17,20 +17,37 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
+import java.util.Objects;
 
 public class McpClient {
+  private static final String DEFAULT_INVOKE_PATH = "/mcp/invoke";
+  private static final String DEFAULT_STREAM_PATH = "/mcp/stream";
+
   private final String clientId;
   private final Transport transport;
   private final ObjectMapper objectMapper;
-
-  public McpClient(String clientId, Transport transport, ObjectMapper objectMapper) {
-    this.clientId = clientId;
-    this.transport = transport;
-    this.objectMapper = configure(objectMapper);
-  }
+  private final String invokePath;
+  private final String streamPath;
 
   public McpClient(String clientId, Transport transport) {
-    this(clientId, transport, configure(new ObjectMapper()));
+    this(clientId, transport, new ObjectMapper());
+  }
+
+  public McpClient(String clientId, Transport transport, ObjectMapper objectMapper) {
+    this(clientId, transport, objectMapper, DEFAULT_INVOKE_PATH, DEFAULT_STREAM_PATH);
+  }
+
+  public McpClient(
+      String clientId,
+      Transport transport,
+      ObjectMapper objectMapper,
+      String invokePath,
+      String streamPath) {
+    this.clientId = Objects.requireNonNull(clientId, "clientId");
+    this.transport = Objects.requireNonNull(transport, "transport");
+    this.objectMapper = configure(Objects.requireNonNull(objectMapper, "objectMapper"));
+    this.invokePath = defaultIfBlank(invokePath, DEFAULT_INVOKE_PATH);
+    this.streamPath = defaultIfBlank(streamPath, DEFAULT_STREAM_PATH);
   }
 
   private static ObjectMapper configure(ObjectMapper mapper) {
@@ -39,10 +56,17 @@ public class McpClient {
     return mapper;
   }
 
+  private static String defaultIfBlank(String value, String defaultValue) {
+    if (value == null || value.isBlank()) {
+      return defaultValue;
+    }
+    return value;
+  }
+
   public <TRequest, TResponse> StdResponse<TResponse> invoke(
       String toolName, TRequest requestPayload, Class<TResponse> responseType) throws Exception {
     String payload = serializeRequest(toolName, requestPayload);
-    String responseJson = transport.postJson("/mcp/invoke", payload);
+    String responseJson = transport.postJson(invokePath, payload);
     return deserializeResponse(responseJson, responseType);
   }
 
@@ -51,7 +75,7 @@ public class McpClient {
     try {
       String payload = serializeRequest(toolName, requestPayload);
       return transport
-          .postJsonAsync("/mcp/invoke", payload)
+          .postJsonAsync(invokePath, payload)
           .thenApply(
               responseJson -> {
                 try {
@@ -102,8 +126,12 @@ public class McpClient {
     return responseEnvelope.getResponse();
   }
 
+  public void subscribeStream(Consumer<String> onEvent) throws Exception {
+    subscribeStream(null, onEvent);
+  }
+
   public void subscribeStream(String path, Consumer<String> onEvent) throws Exception {
-    transport.getSse(path, onEvent);
+    transport.getSse(defaultIfBlank(path, streamPath), onEvent);
   }
 
   private Context buildContext() {
