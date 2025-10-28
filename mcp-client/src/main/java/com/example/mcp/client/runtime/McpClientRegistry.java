@@ -39,7 +39,16 @@ public class McpClientRegistry {
       ServerConfig serverConfig = entry.getValue();
       Transport transport = transportFactory.create(serverName, serverConfig);
       ObjectMapper mapper = new ObjectMapper();
-      McpClient client = new McpClient(config.getClientId(), transport, mapper);
+      McpClient client =
+          new McpClient(
+              config.getClientId(),
+              transport,
+              mapper,
+              serverConfig.resolveInvokePath(),
+              serverConfig.resolveStreamPath(),
+              serverConfig.resolveSessionPath(),
+              serverConfig.resolveDiscoveryPath(),
+              serverConfig.resolveGovernancePath());
       clients.put(serverName, client);
     }
   }

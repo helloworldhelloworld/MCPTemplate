@@ -8,6 +8,10 @@ import java.util.function.Consumer;
 public interface Transport {
   String postJson(String path, String json) throws Exception;
 
+  default String getJson(String path) throws Exception {
+    throw new UnsupportedOperationException("GET not supported by this transport");
+  }
+
   void getSse(String path, Consumer<String> onEvent) throws Exception;
 
   default CompletionStage<String> postJsonAsync(String path, String json) {

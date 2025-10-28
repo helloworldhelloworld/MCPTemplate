@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TranslationRequest",
+  "type": "object",
+  "required": ["sourceText", "targetLocale"],
+  "properties": {
+    "sourceText": {
+      "type": "string",
+      "description": "待翻译的原文"
+    },
+    "targetLocale": {
+      "type": "string",
+      "pattern": "[a-z]{2}-[A-Z]{2}",
+      "description": "目标语言标识，例如 zh-CN"
+    },
+    "promptTemplate": {
+      "type": "string",
+      "description": "自定义提示模板"
+    }
+  }
+}

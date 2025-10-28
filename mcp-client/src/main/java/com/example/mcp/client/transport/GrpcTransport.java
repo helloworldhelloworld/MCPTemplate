@@ -35,6 +35,11 @@ public class GrpcTransport implements Transport {
   }
 
   @Override
+  public String getJson(String path) {
+    return postJson(path, null);
+  }
+
+  @Override
   public void getSse(String path, Consumer<String> onEvent) {
     Iterator<String> responses =
         ClientCalls.blockingServerStreamingCall(
