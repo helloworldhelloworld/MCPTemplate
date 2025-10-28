@@ -4,6 +4,10 @@ import com.example.mcp.common.Context;
 import com.example.mcp.common.Envelopes.RequestEnvelope;
 import com.example.mcp.common.Envelopes.ResponseEnvelope;
 import com.example.mcp.common.StdResponse;
+import com.example.mcp.common.protocol.GovernanceReport;
+import com.example.mcp.common.protocol.SessionOpenRequest;
+import com.example.mcp.common.protocol.SessionOpenResponse;
+import com.example.mcp.common.protocol.ToolDescriptor;
 import com.example.mcp.client.transport.Transport;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -12,6 +16,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.opentelemetry.api.trace.Span;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -22,19 +27,33 @@ import java.util.Objects;
 public class McpClient {
   private static final String DEFAULT_INVOKE_PATH = "/mcp/invoke";
   private static final String DEFAULT_STREAM_PATH = "/mcp/stream";
+  private static final String DEFAULT_SESSION_PATH = "/mcp/session";
+  private static final String DEFAULT_DISCOVERY_PATH = "/mcp/tools";
+  private static final String DEFAULT_GOVERNANCE_PATH = "/mcp/governance/audit";
 
   private final String clientId;
   private final Transport transport;
   private final ObjectMapper objectMapper;
   private final String invokePath;
   private final String streamPath;
+  private final String sessionPath;
+  private final String discoveryPath;
+  private final String governancePath;
 
   public McpClient(String clientId, Transport transport) {
     this(clientId, transport, new ObjectMapper());
   }
 
   public McpClient(String clientId, Transport transport, ObjectMapper objectMapper) {
-    this(clientId, transport, objectMapper, DEFAULT_INVOKE_PATH, DEFAULT_STREAM_PATH);
+    this(
+        clientId,
+        transport,
+        objectMapper,
+        DEFAULT_INVOKE_PATH,
+        DEFAULT_STREAM_PATH,
+        DEFAULT_SESSION_PATH,
+        DEFAULT_DISCOVERY_PATH,
+        DEFAULT_GOVERNANCE_PATH);
   }
 
   public McpClient(
@@ -43,11 +62,34 @@ public class McpClient {
       ObjectMapper objectMapper,
       String invokePath,
       String streamPath) {
+    this(
+        clientId,
+        transport,
+        objectMapper,
+        invokePath,
+        streamPath,
+        DEFAULT_SESSION_PATH,
+        DEFAULT_DISCOVERY_PATH,
+        DEFAULT_GOVERNANCE_PATH);
+  }
+
+  public McpClient(
+      String clientId,
+      Transport transport,
+      ObjectMapper objectMapper,
+      String invokePath,
+      String streamPath,
+      String sessionPath,
+      String discoveryPath,
+      String governancePath) {
     this.clientId = Objects.requireNonNull(clientId, "clientId");
     this.transport = Objects.requireNonNull(transport, "transport");
     this.objectMapper = configure(Objects.requireNonNull(objectMapper, "objectMapper"));
     this.invokePath = defaultIfBlank(invokePath, DEFAULT_INVOKE_PATH);
     this.streamPath = defaultIfBlank(streamPath, DEFAULT_STREAM_PATH);
+    this.sessionPath = defaultIfBlank(sessionPath, DEFAULT_SESSION_PATH);
+    this.discoveryPath = defaultIfBlank(discoveryPath, DEFAULT_DISCOVERY_PATH);
+    this.governancePath = defaultIfBlank(governancePath, DEFAULT_GOVERNANCE_PATH);
   }
 
   private static ObjectMapper configure(ObjectMapper mapper) {
@@ -61,6 +103,43 @@ public class McpClient {
       return defaultValue;
     }
     return value;
+  }
+
+  public StdResponse<SessionOpenResponse> openSession(SessionOpenRequest request) throws Exception {
+    SessionOpenRequest payload = request != null ? request : new SessionOpenRequest();
+    if (payload.getClientId() == null) {
+      payload.setClientId(clientId);
+    }
+    String json = objectMapper.writeValueAsString(payload);
+    String responseJson = transport.postJson(sessionPath, json);
+    JavaType stdType =
+        objectMapper
+            .getTypeFactory()
+            .constructParametricType(StdResponse.class, SessionOpenResponse.class);
+    return objectMapper.readValue(responseJson, stdType);
+  }
+
+  public StdResponse<List<ToolDescriptor>> discoverTools() throws Exception {
+    String responseJson = transport.getJson(discoveryPath);
+    JavaType listType =
+        objectMapper
+            .getTypeFactory()
+            .constructCollectionType(List.class, ToolDescriptor.class);
+    JavaType stdType = objectMapper.getTypeFactory().constructParametricType(StdResponse.class, listType);
+    return objectMapper.readValue(responseJson, stdType);
+  }
+
+  public StdResponse<GovernanceReport> fetchGovernanceReport(String requestId) throws Exception {
+    String path = governancePath;
+    if (requestId != null && !requestId.isBlank()) {
+      path = governancePath.endsWith("/") ? governancePath + requestId : governancePath + "/" + requestId;
+    }
+    String responseJson = transport.getJson(path);
+    JavaType stdType =
+        objectMapper
+            .getTypeFactory()
+            .constructParametricType(StdResponse.class, GovernanceReport.class);
+    return objectMapper.readValue(responseJson, stdType);
   }
 
   public <TRequest, TResponse> StdResponse<TResponse> invoke(

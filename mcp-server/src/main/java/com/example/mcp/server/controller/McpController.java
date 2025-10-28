@@ -6,8 +6,10 @@ import com.example.mcp.common.Envelopes.ResponseEnvelope;
 import com.example.mcp.common.Envelopes.StreamEventEnvelope;
 import com.example.mcp.common.Envelopes.UiCard;
 import com.example.mcp.common.StdResponse;
+import com.example.mcp.common.protocol.InvocationAuditRecord;
 import com.example.mcp.server.handler.ToolHandler;
 import com.example.mcp.server.handler.ToolRegistry;
+import com.example.mcp.server.service.InvocationAuditService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.OffsetDateTime;
@@ -31,10 +33,13 @@ public class McpController {
   private static final Logger log = LoggerFactory.getLogger(McpController.class);
   private final ToolRegistry toolRegistry;
   private final ObjectMapper objectMapper;
+  private final InvocationAuditService auditService;
 
-  public McpController(ToolRegistry toolRegistry, ObjectMapper objectMapper) {
+  public McpController(
+      ToolRegistry toolRegistry, ObjectMapper objectMapper, InvocationAuditService auditService) {
     this.toolRegistry = toolRegistry;
     this.objectMapper = objectMapper;
+    this.auditService = auditService;
   }
 
   @PostMapping(path = "/mcp/invoke", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -75,6 +80,8 @@ public class McpController {
           envelope.setUiCard(card);
         }
       }
+
+      auditService.record(buildAuditRecord(requestEnvelope.getTool(), context, response));
       return ResponseEntity.ok(envelope);
     } catch (IllegalArgumentException ex) {
       log.warn("Invocation error: {}", ex.getMessage());
@@ -135,12 +142,12 @@ public class McpController {
       String prompt = metadata.getOrDefault("clarify.prompt", response.getMessage());
       card.setBody(prompt);
       String missingField = metadata.get("clarify.missingField");
-      if ("targetLanguage".equals(missingField)) {
-        card.getActions().put("选择中文", "targetLanguage=zh-CN");
-        card.getActions().put("选择英文", "targetLanguage=en-US");
-        card.getActions().put("选择日文", "targetLanguage=ja-JP");
-      } else if ("text".equals(missingField)) {
-        card.getActions().put("输入原文", "text=<请输入需要翻译的内容>");
+      if ("targetLocale".equals(missingField)) {
+        card.getActions().put("选择中文", "targetLocale=zh-CN");
+        card.getActions().put("选择英文", "targetLocale=en-US");
+        card.getActions().put("选择日文", "targetLocale=ja-JP");
+      } else if ("sourceText".equals(missingField)) {
+        card.getActions().put("输入原文", "sourceText=<请输入需要翻译的内容>");
         String examples = metadata.get("clarify.examples");
         if (examples != null) {
           card.setSubtitle(examples);
@@ -161,5 +168,26 @@ public class McpController {
       card.setBody(translated);
     }
     return card;
+  }
+
+  private InvocationAuditRecord buildAuditRecord(
+      String tool, Context context, StdResponse<Object> response) {
+    InvocationAuditRecord record = new InvocationAuditRecord();
+    record.setTool(tool);
+    if (context != null) {
+      record.setRequestId(context.getRequestId());
+      record.setClientId(context.getClientId());
+      record.setOccurredAt(context.getTimestamp());
+      if (context.getUsage() != null) {
+        record.setLatencyMs(context.getUsage().getLatencyMs());
+      }
+    }
+    if (response != null) {
+      record.setStatus(response.getStatus());
+    }
+    if (record.getOccurredAt() == null) {
+      record.setOccurredAt(OffsetDateTime.now());
+    }
+    return record;
   }
 }

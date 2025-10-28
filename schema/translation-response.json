@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TranslationResponse",
+  "type": "object",
+  "required": ["translatedText"],
+  "properties": {
+    "sourceText": {
+      "type": "string",
+      "description": "原文"
+    },
+    "targetLocale": {
+      "type": "string",
+      "description": "目标语言"
+    },
+    "translatedText": {
+      "type": "string",
+      "description": "翻译结果"
+    },
+    "model": {
+      "type": "string",
+      "description": "执行翻译的模型标识"
+    }
+  }
+}

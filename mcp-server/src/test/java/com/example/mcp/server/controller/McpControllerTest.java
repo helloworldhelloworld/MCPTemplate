@@ -4,15 +4,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.mcp.common.Context;
 import com.example.mcp.common.Envelopes.RequestEnvelope;
 import com.example.mcp.common.Envelopes.ResponseEnvelope;
 import com.example.mcp.common.StdResponse;
+import com.example.mcp.common.protocol.InvocationAuditRecord;
 import com.example.mcp.server.handler.ToolHandler;
 import com.example.mcp.server.handler.ToolRegistry;
 import com.example.mcp.server.handler.TranslationInvokeHandler;
+import com.example.mcp.server.service.InvocationAuditService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -25,7 +28,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,13 +42,14 @@ class McpControllerTest {
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
   @Mock private ToolRegistry toolRegistry;
+  @Mock private InvocationAuditService auditService;
 
   private McpController controller;
 
   @BeforeEach
   void setUp() {
     MockitoAnnotations.openMocks(this);
-    controller = new McpController(toolRegistry, mapper);
+    controller = new McpController(toolRegistry, mapper, auditService);
   }
 
   @Test
@@ -58,9 +64,8 @@ class McpControllerTest {
     JsonNode payload =
         mapper
             .createObjectNode()
-            .put("text", "hello")
-            .put("sourceLanguage", "en")
-            .put("targetLanguage", "fr");
+            .put("sourceText", "hello")
+            .put("targetLocale", "fr-FR");
     envelope.setPayload(payload);
 
     MockHttpServletRequest servletRequest = new MockHttpServletRequest();
@@ -77,6 +82,43 @@ class McpControllerTest {
     assertNotNull(body.getUiCard());
     assertEquals("Translation Result", body.getUiCard().getTitle());
     assertTrue(body.getContext().getTimestamp().isBefore(OffsetDateTime.now().plusSeconds(1)));
+
+    ArgumentCaptor<InvocationAuditRecord> captor =
+        ArgumentCaptor.forClass(InvocationAuditRecord.class);
+    verify(auditService).record(captor.capture());
+    assertEquals("mcp.translation.invoke", captor.getValue().getTool());
+    assertEquals("success", captor.getValue().getStatus());
+  }
+
+  @Test
+  void invokeReturnsClarificationCardWhenTargetMissing() throws Exception {
+    TranslationInvokeHandler handler = new TranslationInvokeHandler();
+    when(toolRegistry.find("mcp.translation.invoke")).thenReturn(Optional.of(handler));
+
+    RequestEnvelope envelope = new RequestEnvelope();
+    envelope.setTool("mcp.translation.invoke");
+    Context context = new Context();
+    envelope.setContext(context);
+    JsonNode payload = mapper.createObjectNode().put("sourceText", "你好");
+    envelope.setPayload(payload);
+
+    MockHttpServletRequest servletRequest = new MockHttpServletRequest();
+
+    ResponseEntity<?> response = controller.invoke(envelope, servletRequest);
+
+    assertEquals(HttpStatus.OK, response.getStatusCode());
+    ResponseEnvelope<?> body = (ResponseEnvelope<?>) response.getBody();
+    assertNotNull(body);
+    assertEquals("clarify", body.getResponse().getStatus());
+    assertNotNull(body.getUiCard());
+    assertEquals("澄清请求", body.getUiCard().getTitle());
+    assertEquals("请选择目标语言，例如 zh-CN、en-US", body.getUiCard().getBody());
+    assertTrue(body.getUiCard().getActions().containsKey("选择中文"));
+
+    ArgumentCaptor<InvocationAuditRecord> captor =
+        ArgumentCaptor.forClass(InvocationAuditRecord.class);
+    verify(auditService).record(captor.capture());
+    assertEquals("clarify", captor.getValue().getStatus());
   }
 
   @Test

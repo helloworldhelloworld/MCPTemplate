@@ -47,6 +47,17 @@ public class HttpTransport implements Transport {
   }
 
   @Override
+  public String getJson(String path) throws Exception {
+    Request request = new Request.Builder().url(baseUrl + path).get().build();
+    try (Response response = client.newCall(request).execute()) {
+      if (!response.isSuccessful()) {
+        throw new IllegalStateException("HTTP error: " + response.code());
+      }
+      return Objects.requireNonNull(response.body()).string();
+    }
+  }
+
+  @Override
   public void getSse(String path, Consumer<String> onEvent) throws Exception {
     Request request =
         new Request.Builder()

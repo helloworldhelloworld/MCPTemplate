@@ -45,7 +45,10 @@ public class McpClientRegistry {
               transport,
               mapper,
               serverConfig.resolveInvokePath(),
-              serverConfig.resolveStreamPath());
+              serverConfig.resolveStreamPath(),
+              serverConfig.resolveSessionPath(),
+              serverConfig.resolveDiscoveryPath(),
+              serverConfig.resolveGovernancePath());
       clients.put(serverName, client);
     }
   }

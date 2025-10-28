@@ -2,12 +2,16 @@ package com.example.mcp.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 
 import com.example.mcp.client.transport.Transport;
 import com.example.mcp.common.StdResponse;
+import com.example.mcp.common.protocol.GovernanceReport;
+import com.example.mcp.common.protocol.SessionOpenResponse;
+import com.example.mcp.common.protocol.ToolDescriptor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
@@ -17,6 +21,54 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 class McpClientTest {
+
+  @Test
+  void openSessionUsesConfiguredPath() throws Exception {
+    Transport transport = Mockito.mock(Transport.class);
+    McpClient client = new McpClient("client-1", transport, new ObjectMapper());
+    Mockito
+        .when(transport.postJson(eq("/mcp/session"), any()))
+        .thenReturn(
+            "{\"status\":\"success\",\"code\":\"SESSION_OPENED\",\"data\":{\"sessionId\":\"s-1\"}}"
+                );
+
+    StdResponse<SessionOpenResponse> response = client.openSession(null);
+
+    assertEquals("SESSION_OPENED", response.getCode());
+    assertEquals("s-1", response.getData().getSessionId());
+  }
+
+  @Test
+  void discoverToolsParsesDescriptors() throws Exception {
+    Transport transport = Mockito.mock(Transport.class);
+    McpClient client = new McpClient("client-1", transport, new ObjectMapper());
+    Mockito
+        .when(transport.getJson("/mcp/tools"))
+        .thenReturn(
+            "{\"status\":\"success\",\"code\":\"TOOLS\",\"data\":[{\"name\":\"mcp.translation.invoke\",\"title\":\"翻译工具\"}]}"
+                );
+
+    StdResponse<java.util.List<ToolDescriptor>> response = client.discoverTools();
+
+    assertEquals(1, response.getData().size());
+    assertEquals("mcp.translation.invoke", response.getData().get(0).getName());
+  }
+
+  @Test
+  void fetchGovernanceReportDelegatesToTransport() throws Exception {
+    Transport transport = Mockito.mock(Transport.class);
+    McpClient client = new McpClient("client-1", transport, new ObjectMapper());
+    Mockito
+        .when(transport.getJson("/mcp/governance/audit/req-1"))
+        .thenReturn(
+            "{\"status\":\"success\",\"code\":\"AUDIT\",\"data\":{\"events\":[{\"requestId\":\"req-1\"}]}}"
+                );
+
+    StdResponse<GovernanceReport> response = client.fetchGovernanceReport("req-1");
+
+    assertEquals(1, response.getData().getEvents().size());
+    assertEquals("req-1", response.getData().getEvents().get(0).getRequestId());
+  }
 
   @Test
   void invokeParsesStdResponse() throws Exception {
@@ -93,19 +145,43 @@ class McpClientTest {
         .thenReturn(
             "{\"status\":\"success\",\"code\":\"OK\",\"message\":\"done\",\"data\":{}}"
                 );
+    Mockito
+        .when(transport.postJson(eq("/api/mcp/session"), any()))
+        .thenReturn(
+            "{\"status\":\"success\",\"code\":\"SESSION_OPENED\",\"data\":{\"sessionId\":\"s-2\"}}"
+                );
+    Mockito
+        .when(transport.getJson("/api/mcp/tools"))
+        .thenReturn("{\"status\":\"success\",\"code\":\"TOOLS\",\"data\":[]}");
+    Mockito
+        .when(transport.getJson("/api/mcp/governance/audit"))
+        .thenReturn("{\"status\":\"success\",\"code\":\"AUDIT\",\"data\":{\"events\":[]}}");
 
     McpClient client =
         new McpClient(
-            "client-1", transport, new ObjectMapper(), "/api/mcp/invoke", "/api/mcp/stream");
+            "client-1",
+            transport,
+            new ObjectMapper(),
+            "/api/mcp/invoke",
+            "/api/mcp/stream",
+            "/api/mcp/session",
+            "/api/mcp/tools",
+            "/api/mcp/governance/audit");
 
     try (MockedStatic<Span> spanMock = Mockito.mockStatic(Span.class)) {
       spanMock.when(Span::current).thenReturn(null);
       client.invoke("tool.name", new RequestPayload("hello"), ResponsePayload.class);
     }
     client.subscribeStream(null, __ -> {});
+    client.openSession(null);
+    client.discoverTools();
+    client.fetchGovernanceReport(null);
 
     verify(transport).postJson(eq("/api/mcp/invoke"), any());
     verify(transport).getSse(eq("/api/mcp/stream"), any());
+    verify(transport).postJson(eq("/api/mcp/session"), any());
+    verify(transport).getJson("/api/mcp/tools");
+    verify(transport).getJson("/api/mcp/governance/audit");
   }
 
   private static class RequestPayload {
