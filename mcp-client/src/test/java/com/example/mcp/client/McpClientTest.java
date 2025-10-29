@@ -12,7 +12,7 @@ import com.example.mcp.client.invocation.InvocationLogger;
 import com.example.mcp.client.invocation.InvocationOptions;
 import com.example.mcp.client.invocation.ProgressListener;
 import com.example.mcp.client.invocation.SamplingResult;
-import com.example.mcp.client.springai.SpringAiMcpClientBridge;
+import com.example.mcp.client.spi.McpFrameworkClient;
 import com.example.mcp.common.Context;
 import com.example.mcp.common.Envelopes.RequestEnvelope;
 import com.example.mcp.common.Envelopes.StreamEventEnvelope;
@@ -37,7 +37,7 @@ class McpClientTest {
 
   @Test
   void openSessionCachesTools() {
-    SpringAiMcpClientBridge bridge = Mockito.mock(SpringAiMcpClientBridge.class);
+    McpFrameworkClient bridge = Mockito.mock(McpFrameworkClient.class);
     SessionOpenResponse session = new SessionOpenResponse();
     session.setSessionId("session-1");
     ToolDescriptor descriptor = new ToolDescriptor();
@@ -55,7 +55,7 @@ class McpClientTest {
 
   @Test
   void discoverToolsPopulatesCache() {
-    SpringAiMcpClientBridge bridge = Mockito.mock(SpringAiMcpClientBridge.class);
+    McpFrameworkClient bridge = Mockito.mock(McpFrameworkClient.class);
     ToolDescriptor descriptor = new ToolDescriptor();
     descriptor.setName("demo-tool");
     StdResponse<List<ToolDescriptor>> response = StdResponse.success("TOOLS", "ok", List.of(descriptor));
@@ -71,7 +71,7 @@ class McpClientTest {
 
   @Test
   void invokeConvertsResponsePayload() throws Exception {
-    SpringAiMcpClientBridge bridge = Mockito.mock(SpringAiMcpClientBridge.class);
+    McpFrameworkClient bridge = Mockito.mock(McpFrameworkClient.class);
     McpClient client = new McpClient("client-1", bridge, mapper);
     ObjectMapper mapper = new ObjectMapper();
     JsonNode data = mapper.readTree("{\"value\":42}");
@@ -95,7 +95,7 @@ class McpClientTest {
 
   @Test
   void invokeSupportsSampling() throws Exception {
-    SpringAiMcpClientBridge bridge = Mockito.mock(SpringAiMcpClientBridge.class);
+    McpFrameworkClient bridge = Mockito.mock(McpFrameworkClient.class);
     McpClient client = new McpClient("client-1", bridge, mapper);
     JsonNode data = mapper.readTree("{\"value\":21}");
     when(bridge.invoke(any(RequestEnvelope.class)))
@@ -114,7 +114,7 @@ class McpClientTest {
 
   @Test
   void fetchGovernanceDelegatesToBridge() {
-    SpringAiMcpClientBridge bridge = Mockito.mock(SpringAiMcpClientBridge.class);
+    McpFrameworkClient bridge = Mockito.mock(McpFrameworkClient.class);
     GovernanceReport report = new GovernanceReport();
     report.setEvents(List.of(new GovernanceReport.Event()));
     when(bridge.governance("req-1")).thenReturn(StdResponse.success("AUDIT", "ok", report));
@@ -128,7 +128,7 @@ class McpClientTest {
 
   @Test
   void progressListenerFiltersByRequestId() {
-    SpringAiMcpClientBridge bridge = Mockito.mock(SpringAiMcpClientBridge.class);
+    McpFrameworkClient bridge = Mockito.mock(McpFrameworkClient.class);
     McpClient client = new McpClient("client-1", bridge, mapper);
     StreamEventEnvelope<JsonNode> matching = new StreamEventEnvelope<>();
     com.example.mcp.common.Envelopes.Response<JsonNode> response =
@@ -175,7 +175,7 @@ class McpClientTest {
 
   @Test
   void registerLoggerInvokesCallbacks() throws Exception {
-    SpringAiMcpClientBridge bridge = Mockito.mock(SpringAiMcpClientBridge.class);
+    McpFrameworkClient bridge = Mockito.mock(McpFrameworkClient.class);
     McpClient client = new McpClient("client-1", bridge, mapper);
     JsonNode data = mapper.readTree("{\"value\":10}");
     when(bridge.invoke(any(RequestEnvelope.class)))

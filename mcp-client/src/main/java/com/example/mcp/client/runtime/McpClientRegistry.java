@@ -3,7 +3,7 @@ package com.example.mcp.client.runtime;
 import com.example.mcp.client.McpClient;
 import com.example.mcp.client.config.McpClientConfig;
 import com.example.mcp.client.config.ServerConfig;
-import com.example.mcp.client.springai.SpringAiMcpClientBridge;
+import com.example.mcp.client.springai.SpringAiMcpClientAdapter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.Map;
@@ -49,8 +49,8 @@ public class McpClientRegistry implements AutoCloseable {
           "Spring AI MCP client requires baseUrl for server " + serverName);
     }
     ObjectMapper mapper = new ObjectMapper();
-    SpringAiMcpClientBridge bridge =
-        new SpringAiMcpClientBridge(config.getClientId(), serverConfig.getBaseUrl());
+    SpringAiMcpClientAdapter bridge =
+        new SpringAiMcpClientAdapter(config.getClientId(), serverConfig.getBaseUrl());
     return new McpClient(config.getClientId(), bridge, mapper);
   }
 

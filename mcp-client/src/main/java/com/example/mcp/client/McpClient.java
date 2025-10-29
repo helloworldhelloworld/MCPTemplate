@@ -5,7 +5,8 @@ import com.example.mcp.client.invocation.InvocationLogger;
 import com.example.mcp.client.invocation.InvocationOptions;
 import com.example.mcp.client.invocation.ProgressListener;
 import com.example.mcp.client.invocation.SamplingResult;
-import com.example.mcp.client.springai.SpringAiMcpClientBridge;
+import com.example.mcp.client.spi.McpFrameworkClient;
+import com.example.mcp.client.springai.SpringAiMcpClientAdapter;
 import com.example.mcp.common.Context;
 import com.example.mcp.common.Envelopes.RequestEnvelope;
 import com.example.mcp.common.Envelopes.StreamEventEnvelope;
@@ -38,7 +39,7 @@ import reactor.core.publisher.Flux;
 
 public class McpClient implements AutoCloseable {
   private final String clientId;
-  private final SpringAiMcpClientBridge bridge;
+  private final McpFrameworkClient bridge;
   private final ObjectMapper objectMapper;
   private final Map<String, ToolDescriptor> toolCatalog = new ConcurrentHashMap<>();
   private final List<InvocationLogger> loggers = new CopyOnWriteArrayList<>();
@@ -49,10 +50,10 @@ public class McpClient implements AutoCloseable {
   }
 
   public McpClient(String clientId, String baseUrl, ObjectMapper objectMapper) {
-    this(clientId, new SpringAiMcpClientBridge(clientId, baseUrl), objectMapper);
+    this(clientId, new SpringAiMcpClientAdapter(clientId, baseUrl), objectMapper);
   }
 
-  public McpClient(String clientId, SpringAiMcpClientBridge bridge, ObjectMapper objectMapper) {
+  public McpClient(String clientId, McpFrameworkClient bridge, ObjectMapper objectMapper) {
     this.clientId = Objects.requireNonNull(clientId, "clientId");
     this.bridge = Objects.requireNonNull(bridge, "bridge");
     this.objectMapper = configure(Objects.requireNonNull(objectMapper, "objectMapper"));
