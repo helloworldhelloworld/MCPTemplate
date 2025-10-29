@@ -3,13 +3,7 @@
   "defaultServer": "local-http",
   "servers": {
     "local-http": {
-      "type": "HTTP",
-      "baseUrl": "http://localhost:8080",
-      "interceptors": [
-        {
-          "className": "com.example.mcp.client.interceptor.TraceInterceptor"
-        }
-      ]
+      "baseUrl": "http://localhost:8080"
     }
   },
   "routes": {

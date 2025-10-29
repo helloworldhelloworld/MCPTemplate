@@ -2,7 +2,6 @@ package com.example.mcp.client.runtime;
 
 import com.example.mcp.client.config.McpClientConfig;
 import com.example.mcp.client.config.McpClientConfigLoader;
-import com.example.mcp.client.config.TransportFactory;
 import com.example.mcp.client.event.McpEventBus;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -14,10 +13,13 @@ public class McpClientEnvironment implements AutoCloseable {
   private final McpRouteDispatcher dispatcher;
 
   public McpClientEnvironment(McpClientConfig config) {
+    this(config, new McpClientRegistry(config));
+  }
+
+  public McpClientEnvironment(McpClientConfig config, McpClientRegistry registry) {
     this.config = config;
     this.eventBus = new McpEventBus();
-    TransportFactory factory = new TransportFactory();
-    this.registry = new McpClientRegistry(config, factory);
+    this.registry = registry;
     this.dispatcher = new McpRouteDispatcher(config, registry, eventBus);
   }
 
@@ -47,5 +49,6 @@ public class McpClientEnvironment implements AutoCloseable {
   @Override
   public void close() {
     dispatcher.close();
+    registry.close();
   }
 }

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AudioTranscriptionResponse",
+  "type": "object",
+  "properties": {
+    "audioUri": {
+      "type": "string",
+      "description": "输入的音频地址"
+    },
+    "transcript": {
+      "type": "string",
+      "description": "识别出来的文本"
+    },
+    "language": {
+      "type": "string",
+      "description": "识别语言代码"
+    }
+  },
+  "required": ["audioUri", "transcript"],
+  "additionalProperties": false
+}

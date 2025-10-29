@@ -11,7 +11,7 @@
     <module>mcp-client</module>
   </modules>
   <properties>
-    <java.version>1.8</java.version>
+    <java.version>17</java.version>
     <maven.compiler.source>${java.version}</maven.compiler.source>
     <maven.compiler.target>${java.version}</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -19,6 +19,7 @@
     <mockito.version>5.11.0</mockito.version>
     <jacoco.version>0.8.11</jacoco.version>
     <spring-ai.version>1.0.0-M2</spring-ai.version>
+    <spring.boot.version>3.2.5</spring.boot.version>
   </properties>
   <build>
     <pluginManagement>
@@ -79,4 +80,15 @@
       </plugins>
     </pluginManagement>
   </build>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-dependencies</artifactId>
+        <version>${spring.boot.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 </project>
