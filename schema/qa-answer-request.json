@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QaAnswerRequest",
+  "type": "object",
+  "properties": {
+    "question": {
+      "type": "string",
+      "description": "用户提出的问题"
+    },
+    "context": {
+      "type": "object",
+      "description": "可选的上下文信息",
+      "additionalProperties": true
+    }
+  },
+  "required": ["question"],
+  "additionalProperties": false
+}

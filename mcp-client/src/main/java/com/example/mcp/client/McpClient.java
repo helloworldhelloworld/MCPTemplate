@@ -1,16 +1,19 @@
 package com.example.mcp.client;
 
+import com.example.mcp.client.invocation.ElicitationStrategy;
+import com.example.mcp.client.invocation.InvocationLogger;
+import com.example.mcp.client.invocation.InvocationOptions;
+import com.example.mcp.client.invocation.ProgressListener;
+import com.example.mcp.client.invocation.SamplingResult;
+import com.example.mcp.client.springai.SpringAiMcpClientBridge;
 import com.example.mcp.common.Context;
 import com.example.mcp.common.Envelopes.RequestEnvelope;
-import com.example.mcp.common.Envelopes.ResponseEnvelope;
+import com.example.mcp.common.Envelopes.StreamEventEnvelope;
 import com.example.mcp.common.StdResponse;
 import com.example.mcp.common.protocol.GovernanceReport;
-import com.example.mcp.common.protocol.ProtocolDescriptor;
 import com.example.mcp.common.protocol.SessionOpenRequest;
 import com.example.mcp.common.protocol.SessionOpenResponse;
 import com.example.mcp.common.protocol.ToolDescriptor;
-import com.example.mcp.client.transport.Transport;
-import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -21,83 +24,39 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Consumer;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
+import reactor.core.Disposable;
+import reactor.core.publisher.Flux;
 
-public class McpClient {
-  private static final String DEFAULT_INVOKE_PATH = "/mcp/invoke";
-  private static final String DEFAULT_STREAM_PATH = "/mcp/stream";
-  private static final String DEFAULT_SESSION_PATH = "/mcp/session";
-  private static final String DEFAULT_DISCOVERY_PATH = "/mcp/tools";
-  private static final String DEFAULT_GOVERNANCE_PATH = "/mcp/governance/audit";
-
+public class McpClient implements AutoCloseable {
   private final String clientId;
-  private final Transport transport;
+  private final SpringAiMcpClientBridge bridge;
   private final ObjectMapper objectMapper;
-  private volatile String invokePath;
-  private volatile String streamPath;
-  private volatile String sessionPath;
-  private volatile String discoveryPath;
-  private volatile String governancePath;
-  private volatile ProtocolDescriptor negotiatedProtocol;
   private final Map<String, ToolDescriptor> toolCatalog = new ConcurrentHashMap<>();
+  private final List<InvocationLogger> loggers = new CopyOnWriteArrayList<>();
+  private final NotificationHub notificationHub;
 
-  public McpClient(String clientId, Transport transport) {
-    this(clientId, transport, new ObjectMapper());
+  public McpClient(String clientId, String baseUrl) {
+    this(clientId, baseUrl, new ObjectMapper());
   }
 
-  public McpClient(String clientId, Transport transport, ObjectMapper objectMapper) {
-    this(
-        clientId,
-        transport,
-        objectMapper,
-        DEFAULT_INVOKE_PATH,
-        DEFAULT_STREAM_PATH,
-        DEFAULT_SESSION_PATH,
-        DEFAULT_DISCOVERY_PATH,
-        DEFAULT_GOVERNANCE_PATH);
+  public McpClient(String clientId, String baseUrl, ObjectMapper objectMapper) {
+    this(clientId, new SpringAiMcpClientBridge(clientId, baseUrl), objectMapper);
   }
 
-  public McpClient(
-      String clientId,
-      Transport transport,
-      ObjectMapper objectMapper,
-      String invokePath,
-      String streamPath) {
-    this(
-        clientId,
-        transport,
-        objectMapper,
-        invokePath,
-        streamPath,
-        DEFAULT_SESSION_PATH,
-        DEFAULT_DISCOVERY_PATH,
-        DEFAULT_GOVERNANCE_PATH);
-  }
-
-  public McpClient(
-      String clientId,
-      Transport transport,
-      ObjectMapper objectMapper,
-      String invokePath,
-      String streamPath,
-      String sessionPath,
-      String discoveryPath,
-      String governancePath) {
+  public McpClient(String clientId, SpringAiMcpClientBridge bridge, ObjectMapper objectMapper) {
     this.clientId = Objects.requireNonNull(clientId, "clientId");
-    this.transport = Objects.requireNonNull(transport, "transport");
+    this.bridge = Objects.requireNonNull(bridge, "bridge");
     this.objectMapper = configure(Objects.requireNonNull(objectMapper, "objectMapper"));
-    this.invokePath = defaultIfBlank(invokePath, DEFAULT_INVOKE_PATH);
-    this.streamPath = defaultIfBlank(streamPath, DEFAULT_STREAM_PATH);
-    this.sessionPath = defaultIfBlank(sessionPath, DEFAULT_SESSION_PATH);
-    this.discoveryPath = defaultIfBlank(discoveryPath, DEFAULT_DISCOVERY_PATH);
-    this.governancePath = defaultIfBlank(governancePath, DEFAULT_GOVERNANCE_PATH);
+    this.notificationHub = new NotificationHub();
   }
 
   private static ObjectMapper configure(ObjectMapper mapper) {
@@ -106,123 +65,134 @@ public class McpClient {
     return mapper;
   }
 
-  private static String defaultIfBlank(String value, String defaultValue) {
-    if (value == null || value.isBlank()) {
-      return defaultValue;
-    }
-    return value;
+  public AutoCloseable registerLogger(InvocationLogger logger) {
+    InvocationLogger nonNull = Objects.requireNonNull(logger, "logger");
+    loggers.add(nonNull);
+    return () -> loggers.remove(nonNull);
   }
 
-  public StdResponse<SessionOpenResponse> openSession(SessionOpenRequest request) throws Exception {
+  public AutoCloseable registerProgressListener(ProgressListener listener) {
+    return notificationHub.register(Objects.requireNonNull(listener, "listener"));
+  }
+
+  public StdResponse<SessionOpenResponse> openSession(SessionOpenRequest request) {
     SessionOpenRequest payload = request != null ? request : new SessionOpenRequest();
     if (payload.getClientId() == null) {
       payload.setClientId(clientId);
     }
-    String json = objectMapper.writeValueAsString(payload);
-    String responseJson = transport.postJson(sessionPath, json);
-    JavaType stdType =
-        objectMapper
-            .getTypeFactory()
-            .constructParametricType(StdResponse.class, SessionOpenResponse.class);
-    StdResponse<SessionOpenResponse> response = objectMapper.readValue(responseJson, stdType);
+    StdResponse<SessionOpenResponse> response = bridge.openSession(payload);
     applySessionMetadata(response.getData());
     return response;
   }
 
-  public StdResponse<List<ToolDescriptor>> discoverTools() throws Exception {
-    String responseJson = transport.getJson(discoveryPath);
-    JavaType listType =
-        objectMapper
-            .getTypeFactory()
-            .constructCollectionType(List.class, ToolDescriptor.class);
-    JavaType stdType = objectMapper.getTypeFactory().constructParametricType(StdResponse.class, listType);
-    StdResponse<List<ToolDescriptor>> response = objectMapper.readValue(responseJson, stdType);
+  public StdResponse<List<ToolDescriptor>> discoverTools() {
+    StdResponse<List<ToolDescriptor>> response = bridge.discoverTools();
     cacheTools(response.getData());
     return response;
   }
 
-  public StdResponse<GovernanceReport> fetchGovernanceReport(String requestId) throws Exception {
-    String path = governancePath;
-    if (requestId != null && !requestId.isBlank()) {
-      path = governancePath.endsWith("/") ? governancePath + requestId : governancePath + "/" + requestId;
-    }
-    String responseJson = transport.getJson(path);
-    JavaType stdType =
-        objectMapper
-            .getTypeFactory()
-            .constructParametricType(StdResponse.class, GovernanceReport.class);
-    return objectMapper.readValue(responseJson, stdType);
+  public StdResponse<GovernanceReport> fetchGovernanceReport(String requestId) {
+    return bridge.governance(requestId);
   }
 
   public <TRequest, TResponse> StdResponse<TResponse> invoke(
       String toolName, TRequest requestPayload, Class<TResponse> responseType) throws Exception {
-    String payload = serializeRequest(toolName, requestPayload);
-    String responseJson = transport.postJson(invokePath, payload);
-    return deserializeResponse(responseJson, responseType);
+    SamplingResult<TResponse> result =
+        invokeWithOptions(toolName, requestPayload, responseType, InvocationOptions.<TRequest>builder().build());
+    StdResponse<TResponse> primary = result.primary();
+    if (primary == null) {
+      throw new IllegalStateException("Invocation produced no samples");
+    }
+    return primary;
+  }
+
+  public <TRequest, TResponse> SamplingResult<TResponse> invokeWithOptions(
+      String toolName,
+      TRequest requestPayload,
+      Class<TResponse> responseType,
+      InvocationOptions<TRequest> options)
+      throws Exception {
+    InvocationOptions<TRequest> effective =
+        options != null ? options : InvocationOptions.<TRequest>builder().build();
+    List<StdResponse<TResponse>> samples = new ArrayList<>();
+    for (int i = 0; i < effective.getSamples(); i++) {
+      samples.add(invokeOnce(toolName, requestPayload, responseType, effective));
+    }
+    return new SamplingResult<>(samples);
+  }
+
+  private <TRequest, TResponse> StdResponse<TResponse> invokeOnce(
+      String toolName,
+      TRequest requestPayload,
+      Class<TResponse> responseType,
+      InvocationOptions<TRequest> options)
+      throws Exception {
+    TRequest current = requestPayload;
+    StdResponse<TResponse> response = null;
+    int attempts = 0;
+    do {
+      RequestEnvelope envelope = buildRequestEnvelope(toolName, current);
+      AutoCloseable progressRegistration =
+          registerScopedProgressListener(envelope.getContext(), options.getProgressListener().orElse(null));
+      try {
+        notifyLoggersRequest(toolName, envelope, current, options.getLogger().orElse(null));
+        StdResponse<JsonNode> raw = bridge.invoke(envelope);
+        response = convertResponse(raw, responseType);
+        notifyLoggersResponse(toolName, envelope.getContext(), response, options.getLogger().orElse(null));
+      } catch (Exception ex) {
+        notifyLoggersError(toolName, envelope.getContext(), ex, options.getLogger().orElse(null));
+        throw ex;
+      } finally {
+        if (progressRegistration != null) {
+          try {
+            progressRegistration.close();
+          } catch (Exception ignored) {
+          }
+        }
+      }
+
+      if (!isClarification(response) || options.getElicitationStrategy().isEmpty()) {
+        return response;
+      }
+      ElicitationStrategy<TRequest> strategy = options.getElicitationStrategy().get();
+      TRequest next = strategy.refine(current, response, envelope.getContext());
+      if (next == null || next.equals(current)) {
+        return response;
+      }
+      current = next;
+      attempts++;
+    } while (attempts < options.getMaxElicitationRounds());
+    return response;
   }
 
   public <TRequest, TResponse> CompletionStage<StdResponse<TResponse>> invokeAsync(
       String toolName, TRequest requestPayload, Class<TResponse> responseType) {
-    try {
-      String payload = serializeRequest(toolName, requestPayload);
-      return transport
-          .postJsonAsync(invokePath, payload)
-          .thenApply(
-              responseJson -> {
-                try {
-                  return deserializeResponse(responseJson, responseType);
-                } catch (Exception ex) {
-                  throw new CompletionException(ex);
-                }
-              });
-    } catch (Exception ex) {
-      CompletableFuture<StdResponse<TResponse>> failed = new CompletableFuture<>();
-      failed.completeExceptionally(ex);
-      return failed;
-    }
+    return CompletableFuture.supplyAsync(
+        () -> {
+          try {
+            return invoke(toolName, requestPayload, responseType);
+          } catch (Exception ex) {
+            throw new CompletionException(ex);
+          }
+        });
   }
 
-  private <TRequest> String serializeRequest(String toolName, TRequest requestPayload)
-      throws Exception {
-    RequestEnvelope envelope = new RequestEnvelope();
-    envelope.setTool(toolName);
-    Context context = buildContext();
-    envelope.setContext(context);
-    envelope.setPayload(objectMapper.valueToTree(requestPayload));
-
-    Span current = Span.current();
-    if (current != null) {
-      current.setAttribute("tool.name", toolName);
-    }
-
-    return objectMapper.writeValueAsString(envelope);
-  }
-
-  private <TResponse> StdResponse<TResponse> deserializeResponse(
-      String responseJson, Class<TResponse> responseType) throws Exception {
-    JsonNode rootNode = objectMapper.readTree(responseJson);
-    if (rootNode.has("status")) {
-      JavaType stdType =
-          objectMapper
-              .getTypeFactory()
-              .constructParametricType(StdResponse.class, responseType);
-      return objectMapper.readValue(responseJson, stdType);
-    }
-    JavaType envelopeType =
-        objectMapper
-            .getTypeFactory()
-            .constructParametricType(ResponseEnvelope.class, responseType);
-    ResponseEnvelope<TResponse> responseEnvelope =
-        objectMapper.readValue(responseJson, envelopeType);
-    return responseEnvelope.getResponse();
-  }
-
-  public void subscribeStream(Consumer<String> onEvent) throws Exception {
+  public void subscribeStream(Consumer<String> onEvent) {
     subscribeStream(null, onEvent);
   }
 
-  public void subscribeStream(String path, Consumer<String> onEvent) throws Exception {
-    transport.getSse(defaultIfBlank(path, streamPath), onEvent);
+  public void subscribeStream(String path, Consumer<String> onEvent) {
+    Objects.requireNonNull(onEvent, "onEvent");
+    Flux<StreamEventEnvelope<JsonNode>> flux = bridge.notifications(null);
+    flux.doOnNext(
+            event -> {
+              try {
+                onEvent.accept(objectMapper.writeValueAsString(event));
+              } catch (Exception ex) {
+                throw new CompletionException(ex);
+              }
+            })
+        .blockLast();
   }
 
   public Optional<ToolDescriptor> findTool(String toolName) {
@@ -246,6 +216,44 @@ public class McpClient {
     return Collections.unmodifiableList(new ArrayList<>(toolCatalog.values()));
   }
 
+  @Override
+  public void close() {
+    notificationHub.dispose();
+    bridge.close();
+  }
+
+  private <TResponse> StdResponse<TResponse> convertResponse(
+      StdResponse<JsonNode> raw, Class<TResponse> responseType) throws Exception {
+    if (raw == null) {
+      return null;
+    }
+    StdResponse<TResponse> typed = new StdResponse<>();
+    typed.setStatus(raw.getStatus());
+    typed.setCode(raw.getCode());
+    typed.setMessage(raw.getMessage());
+    if (raw.getData() != null && responseType != null && !Void.class.equals(responseType)) {
+      typed.setData(objectMapper.treeToValue(raw.getData(), responseType));
+    }
+    return typed;
+  }
+
+  private boolean isClarification(StdResponse<?> response) {
+    return response != null && "clarify".equalsIgnoreCase(response.getStatus());
+  }
+
+  private RequestEnvelope buildRequestEnvelope(String toolName, Object requestPayload) {
+    RequestEnvelope envelope = new RequestEnvelope();
+    envelope.setTool(toolName);
+    Context context = buildContext();
+    envelope.setContext(context);
+    envelope.setPayload(objectMapper.valueToTree(requestPayload));
+    Span current = Span.current();
+    if (current != null) {
+      current.setAttribute("tool.name", toolName);
+    }
+    return envelope;
+  }
+
   private Context buildContext() {
     Context context = new Context();
     context.setClientId(clientId);
@@ -258,20 +266,84 @@ public class McpClient {
     return context;
   }
 
+  private AutoCloseable registerScopedProgressListener(Context context, ProgressListener listener) {
+    if (listener == null) {
+      return () -> {};
+    }
+    String requestId = context != null ? context.getRequestId() : null;
+    ProgressListener filtered =
+        new ProgressListener() {
+          @Override
+          public void onEvent(StreamEventEnvelope<JsonNode> event) {
+            JsonNode data = event.getResponse() != null ? event.getResponse().getData() : null;
+            String eventRequestId = data != null ? data.path("requestId").asText(null) : null;
+            if (requestId == null || requestId.equals(eventRequestId)) {
+              listener.onEvent(event);
+            }
+          }
+
+          @Override
+          public void onError(Throwable error) {
+            listener.onError(error);
+          }
+        };
+    return notificationHub.register(filtered);
+  }
+
+  private void notifyLoggersRequest(
+      String toolName, RequestEnvelope envelope, Object payload, InvocationLogger callLogger) {
+    Context context = envelope.getContext();
+    for (InvocationLogger logger : loggers) {
+      try {
+        logger.onRequest(toolName, context, payload);
+      } catch (RuntimeException ignored) {
+      }
+    }
+    if (callLogger != null) {
+      try {
+        callLogger.onRequest(toolName, context, payload);
+      } catch (RuntimeException ignored) {
+      }
+    }
+  }
+
+  private void notifyLoggersResponse(
+      String toolName, Context context, StdResponse<?> response, InvocationLogger callLogger) {
+    for (InvocationLogger logger : loggers) {
+      try {
+        logger.onResponse(toolName, context, response);
+      } catch (RuntimeException ignored) {
+      }
+    }
+    if (callLogger != null) {
+      try {
+        callLogger.onResponse(toolName, context, response);
+      } catch (RuntimeException ignored) {
+      }
+    }
+  }
+
+  private void notifyLoggersError(
+      String toolName, Context context, Throwable error, InvocationLogger callLogger) {
+    for (InvocationLogger logger : loggers) {
+      try {
+        logger.onError(toolName, context, error);
+      } catch (RuntimeException ignored) {
+      }
+    }
+    if (callLogger != null) {
+      try {
+        callLogger.onError(toolName, context, error);
+      } catch (RuntimeException ignored) {
+      }
+    }
+  }
+
   private void applySessionMetadata(SessionOpenResponse session) {
     if (session == null) {
       return;
     }
     cacheTools(session.getTools());
-    ProtocolDescriptor descriptor = session.getProtocol();
-    if (descriptor != null) {
-      this.negotiatedProtocol = descriptor;
-      this.sessionPath = defaultIfBlank(descriptor.getSession(), this.sessionPath);
-      this.invokePath = defaultIfBlank(descriptor.getInvoke(), this.invokePath);
-      this.streamPath = defaultIfBlank(descriptor.getStream(), this.streamPath);
-      this.discoveryPath = defaultIfBlank(descriptor.getDiscovery(), this.discoveryPath);
-      this.governancePath = defaultIfBlank(descriptor.getGovernance(), this.governancePath);
-    }
   }
 
   private void cacheTools(List<ToolDescriptor> descriptors) {
@@ -282,6 +354,65 @@ public class McpClient {
       if (descriptor != null && descriptor.getName() != null) {
         toolCatalog.put(descriptor.getName(), descriptor);
       }
+    }
+  }
+
+  private class NotificationHub {
+    private final List<ProgressListener> listeners = new CopyOnWriteArrayList<>();
+    private volatile Disposable subscription;
+
+    AutoCloseable register(ProgressListener listener) {
+      listeners.add(listener);
+      ensureSubscribed();
+      return () -> unregister(listener);
+    }
+
+    private synchronized void ensureSubscribed() {
+      if (listeners.isEmpty()) {
+        return;
+      }
+      if (subscription != null && !subscription.isDisposed()) {
+        return;
+      }
+      subscription =
+          bridge
+              .notifications(null)
+              .doOnError(this::notifyListenersError)
+              .subscribe(
+                  event -> {
+                    for (ProgressListener listener : listeners) {
+                      try {
+                        listener.onEvent(event);
+                      } catch (RuntimeException ignored) {
+                      }
+                    }
+                  },
+                  this::notifyListenersError);
+    }
+
+    private synchronized void unregister(ProgressListener listener) {
+      listeners.remove(listener);
+      if (listeners.isEmpty() && subscription != null) {
+        subscription.dispose();
+        subscription = null;
+      }
+    }
+
+    private void notifyListenersError(Throwable error) {
+      for (ProgressListener listener : listeners) {
+        try {
+          listener.onError(error);
+        } catch (RuntimeException ignored) {
+        }
+      }
+    }
+
+    void dispose() {
+      if (subscription != null) {
+        subscription.dispose();
+        subscription = null;
+      }
+      listeners.clear();
     }
   }
 }

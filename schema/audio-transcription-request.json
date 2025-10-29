@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AudioTranscriptionRequest",
+  "type": "object",
+  "properties": {
+    "audioUri": {
+      "type": "string",
+      "description": "音频文件的可访问地址"
+    },
+    "language": {
+      "type": "string",
+      "description": "期望的识别语言代码"
+    }
+  },
+  "required": ["audioUri"],
+  "additionalProperties": false
+}

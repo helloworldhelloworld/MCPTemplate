@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VehicleStateRequest",
+  "type": "object",
+  "properties": {
+    "vin": {
+      "type": "string",
+      "description": "车辆 VIN 码"
+    },
+    "mode": {
+      "type": "string",
+      "description": "可选的查询模式"
+    }
+  },
+  "required": ["vin"],
+  "additionalProperties": false
+}
