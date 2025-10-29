@@ -8,6 +8,11 @@ MCP 模板仓库演示模型客户端与工具服务端之间的全链路协议�
 - **mcp-client**：模型侧客户端运行时，提供会话管理、工具发现、调用编排与观测数据汇聚。
 - **schema**：维护与协议对齐的 JSON Schema，供客户端做静态校验与 UI 生成。
 
+## 环境要求
+- 安装 JDK 17，并确保 `JAVA_HOME` 指向对应安装目录（Spring Boot 3.2 及 Maven 编译均依赖 Java 17）。
+- Maven 3.9.0 或以上版本，便于统一插件版本与构建链路。
+- 推荐使用 `mvn -v` 验证工具链是否命中正确的 JDK，再执行 `mvn clean package` 等构建命令。
+
 ## 与官方架构的对齐
 根据 [Model Context Protocol 官方架构说明](https://modelcontextprotocol.io/docs/learn/architecture)，MCP 的交互主体由**模型侧的 Host** 与**工具侧的 Server** 组成，二者通过统一的 Transport 建立长连接，围绕上下文协商、能力发布、调用编排与运行治理开展协作。本仓库的模块可映射到官方术语如下：
 

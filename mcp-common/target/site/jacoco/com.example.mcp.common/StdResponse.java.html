@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>StdResponse.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mcp-common</a> &gt; <a href="index.source.html" class="el_package">com.example.mcp.common</a> &gt; <span class="el_source">StdResponse.java</span></div><h1>StdResponse.java</h1><pre class="source lang-java linenums">package com.example.mcp.common;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.io.Serializable;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+<span class="fc" id="L8">public class StdResponse&lt;T&gt; implements Serializable {</span>
+  @JsonProperty(&quot;status&quot;)
+  private String status;
+
+  @JsonProperty(&quot;code&quot;)
+  private String code;
+
+  @JsonProperty(&quot;message&quot;)
+  private String message;
+
+  @JsonProperty(&quot;data&quot;)
+  private T data;
+
+  public static &lt;T&gt; StdResponse&lt;T&gt; success(String code, String message, T data) {
+<span class="fc" id="L22">    StdResponse&lt;T&gt; response = new StdResponse&lt;&gt;();</span>
+<span class="fc" id="L23">    response.setStatus(&quot;success&quot;);</span>
+<span class="fc" id="L24">    response.setCode(code);</span>
+<span class="fc" id="L25">    response.setMessage(message);</span>
+<span class="fc" id="L26">    response.setData(data);</span>
+<span class="fc" id="L27">    return response;</span>
+  }
+
+  public static &lt;T&gt; StdResponse&lt;T&gt; error(String code, String message) {
+<span class="nc" id="L31">    StdResponse&lt;T&gt; response = new StdResponse&lt;&gt;();</span>
+<span class="nc" id="L32">    response.setStatus(&quot;error&quot;);</span>
+<span class="nc" id="L33">    response.setCode(code);</span>
+<span class="nc" id="L34">    response.setMessage(message);</span>
+<span class="nc" id="L35">    return response;</span>
+  }
+
+  public static &lt;T&gt; StdResponse&lt;T&gt; clarify(String code, String message) {
+<span class="nc" id="L39">    return clarify(code, message, null);</span>
+  }
+
+  public static &lt;T&gt; StdResponse&lt;T&gt; clarify(String code, String message, T data) {
+<span class="fc" id="L43">    StdResponse&lt;T&gt; response = new StdResponse&lt;&gt;();</span>
+<span class="fc" id="L44">    response.setStatus(&quot;clarify&quot;);</span>
+<span class="fc" id="L45">    response.setCode(code);</span>
+<span class="fc" id="L46">    response.setMessage(message);</span>
+<span class="fc" id="L47">    response.setData(data);</span>
+<span class="fc" id="L48">    return response;</span>
+  }
+
+  public String getStatus() {
+<span class="fc" id="L52">    return status;</span>
+  }
+
+  public void setStatus(String status) {
+<span class="fc" id="L56">    this.status = status;</span>
+<span class="fc" id="L57">  }</span>
+
+  public String getCode() {
+<span class="fc" id="L60">    return code;</span>
+  }
+
+  public void setCode(String code) {
+<span class="fc" id="L64">    this.code = code;</span>
+<span class="fc" id="L65">  }</span>
+
+  public String getMessage() {
+<span class="fc" id="L68">    return message;</span>
+  }
+
+  public void setMessage(String message) {
+<span class="fc" id="L72">    this.message = message;</span>
+<span class="fc" id="L73">  }</span>
+
+  public T getData() {
+<span class="fc" id="L76">    return data;</span>
+  }
+
+  public void setData(T data) {
+<span class="fc" id="L80">    this.data = data;</span>
+<span class="fc" id="L81">  }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

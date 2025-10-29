@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslationResponse.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">mcp-common</a> &gt; <a href="index.source.html" class="el_package">com.example.mcp.common.translation</a> &gt; <span class="el_source">TranslationResponse.java</span></div><h1>TranslationResponse.java</h1><pre class="source lang-java linenums">package com.example.mcp.common.translation;
+
+/**
+ * 翻译工具的响应载荷，映射 MCP Envelope 中的数据部分。
+ */
+public class TranslationResponse {
+
+    private String sourceText;
+    private String targetLocale;
+    private String translatedText;
+    private String model;
+
+<span class="nc" id="L13">    public TranslationResponse() {</span>
+<span class="nc" id="L14">    }</span>
+
+<span class="nc" id="L16">    public TranslationResponse(String sourceText, String targetLocale, String translatedText, String model) {</span>
+<span class="nc" id="L17">        this.sourceText = sourceText;</span>
+<span class="nc" id="L18">        this.targetLocale = targetLocale;</span>
+<span class="nc" id="L19">        this.translatedText = translatedText;</span>
+<span class="nc" id="L20">        this.model = model;</span>
+<span class="nc" id="L21">    }</span>
+
+    public String getSourceText() {
+<span class="nc" id="L24">        return sourceText;</span>
+    }
+
+    public void setSourceText(String sourceText) {
+<span class="nc" id="L28">        this.sourceText = sourceText;</span>
+<span class="nc" id="L29">    }</span>
+
+    public String getTargetLocale() {
+<span class="nc" id="L32">        return targetLocale;</span>
+    }
+
+    public void setTargetLocale(String targetLocale) {
+<span class="nc" id="L36">        this.targetLocale = targetLocale;</span>
+<span class="nc" id="L37">    }</span>
+
+    public String getTranslatedText() {
+<span class="nc" id="L40">        return translatedText;</span>
+    }
+
+    public void setTranslatedText(String translatedText) {
+<span class="nc" id="L44">        this.translatedText = translatedText;</span>
+<span class="nc" id="L45">    }</span>
+
+    public String getModel() {
+<span class="nc" id="L48">        return model;</span>
+    }
+
+    public void setModel(String model) {
+<span class="nc" id="L52">        this.model = model;</span>
+<span class="nc" id="L53">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

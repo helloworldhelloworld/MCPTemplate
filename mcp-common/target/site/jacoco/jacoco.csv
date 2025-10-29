@@ -1,0 +1,17 @@
+GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
+mcp-common,com.example.mcp.common,StdResponse,20,67,0,0,6,25,2,11,2,11
+mcp-common,com.example.mcp.common,Context,0,57,0,0,0,23,0,15,0,15
+mcp-common,com.example.mcp.common,Envelopes.ResponseEnvelope,0,31,0,0,0,13,0,9,0,9
+mcp-common,com.example.mcp.common,Envelopes.UiCard,21,15,0,0,9,5,6,3,6,3
+mcp-common,com.example.mcp.common,Envelopes.RequestEnvelope,4,32,0,0,2,12,1,8,1,8
+mcp-common,com.example.mcp.common,Envelopes.GlossaryEntry,17,0,0,0,7,0,5,0,5,0
+mcp-common,com.example.mcp.common,Envelopes.StreamEventEnvelope,0,31,0,0,0,13,0,9,0,9
+mcp-common,com.example.mcp.common,Context.Usage,0,24,0,0,0,10,0,7,0,7
+mcp-common,com.example.mcp.common.translation,TranslationRequest,24,0,0,0,10,0,7,0,7,0
+mcp-common,com.example.mcp.common.translation,TranslationResponse,46,0,0,0,20,0,10,0,10,0
+mcp-common,com.example.mcp.common.protocol,SessionOpenResponse,59,0,2,0,20,0,14,0,13,0
+mcp-common,com.example.mcp.common.protocol,ToolDescriptor,87,0,2,0,29,0,16,0,15,0
+mcp-common,com.example.mcp.common.protocol,ProtocolDescriptor,38,0,0,0,16,0,11,0,11,0
+mcp-common,com.example.mcp.common.protocol,SessionOpenRequest,38,0,2,0,12,0,8,0,7,0
+mcp-common,com.example.mcp.common.protocol,GovernanceReport,24,0,2,0,5,0,4,0,3,0
+mcp-common,com.example.mcp.common.protocol,InvocationAuditRecord,45,0,0,0,19,0,13,0,13,0

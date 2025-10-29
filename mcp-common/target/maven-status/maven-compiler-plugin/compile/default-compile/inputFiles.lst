@@ -1,0 +1,11 @@
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/Envelopes.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/protocol/ToolDescriptor.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/protocol/GovernanceReport.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/protocol/SessionOpenRequest.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/Context.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/StdResponse.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/translation/TranslationRequest.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/translation/TranslationResponse.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/protocol/SessionOpenResponse.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/protocol/InvocationAuditRecord.java
+/Users/hello/Documents/codex/sourcecode/MCPTemplate/mcp-common/src/main/java/com/example/mcp/common/protocol/ProtocolDescriptor.java
