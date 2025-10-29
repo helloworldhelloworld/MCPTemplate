@@ -38,6 +38,9 @@ class McpProtocolControllerTest {
     assertEquals("SESSION_OPENED", response.getCode());
     assertNotNull(response.getData().getSessionId());
     assertEquals("demo", response.getData().getServerName());
+    assertNotNull(response.getData().getProtocol());
+    assertEquals(
+        McpProtocolController.INVOKE_PATH, response.getData().getProtocol().getInvoke());
     assertEquals(1, response.getData().getTools().size());
     ToolDescriptor descriptor = response.getData().getTools().get(0);
     assertEquals("mcp.translation.invoke", descriptor.getName());

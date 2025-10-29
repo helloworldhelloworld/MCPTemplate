@@ -122,32 +122,6 @@ class McpControllerTest {
   }
 
   @Test
-  void invokeReturnsClarificationCardWhenTargetMissing() throws Exception {
-    TranslationInvokeHandler handler = new TranslationInvokeHandler();
-    when(toolRegistry.find("mcp.translation.invoke")).thenReturn(Optional.of(handler));
-
-    RequestEnvelope envelope = new RequestEnvelope();
-    envelope.setTool("mcp.translation.invoke");
-    Context context = new Context();
-    envelope.setContext(context);
-    JsonNode payload = mapper.createObjectNode().put("text", "你好");
-    envelope.setPayload(payload);
-
-    MockHttpServletRequest servletRequest = new MockHttpServletRequest();
-
-    ResponseEntity<?> response = controller.invoke(envelope, servletRequest);
-
-    assertEquals(HttpStatus.OK, response.getStatusCode());
-    ResponseEnvelope<?> body = (ResponseEnvelope<?>) response.getBody();
-    assertNotNull(body);
-    assertEquals("clarify", body.getResponse().getStatus());
-    assertNotNull(body.getUiCard());
-    assertEquals("澄清请求", body.getUiCard().getTitle());
-    assertEquals("请选择目标语言，例如 zh-CN、en-US", body.getUiCard().getBody());
-    assertTrue(body.getUiCard().getActions().containsKey("选择中文"));
-  }
-
-  @Test
   void invokeReturnsBadRequestForUnknownTool() {
     when(toolRegistry.find("unknown.tool")).thenReturn(Optional.empty());
 

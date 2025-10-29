@@ -22,6 +22,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class McpProtocolController {
+  public static final String SESSION_PATH = "/mcp/session";
+  public static final String DISCOVERY_PATH = "/mcp/tools";
+  public static final String INVOKE_PATH = "/mcp/invoke";
+  public static final String STREAM_PATH = "/mcp/stream";
+  public static final String GOVERNANCE_PATH = "/mcp/governance/audit";
+
   private final ToolRegistry toolRegistry;
   private final InvocationAuditService auditService;
   private final String serverName;
@@ -38,7 +44,7 @@ public class McpProtocolController {
     this.serverVersion = serverVersion;
   }
 
-  @PostMapping(path = "/mcp/session", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PostMapping(path = SESSION_PATH, consumes = MediaType.APPLICATION_JSON_VALUE)
   public StdResponse<SessionOpenResponse> openSession(
       @RequestBody(required = false) SessionOpenRequest request) {
     SessionOpenResponse response = new SessionOpenResponse();
@@ -47,15 +53,16 @@ public class McpProtocolController {
     response.setServerVersion(serverVersion);
     response.setExpiresAt(OffsetDateTime.now().plusHours(1));
     response.setTools(describeTools());
+    response.setProtocol(buildProtocolDescriptor());
     return StdResponse.success("SESSION_OPENED", "会话建立成功", response);
   }
 
-  @GetMapping(path = "/mcp/tools", produces = MediaType.APPLICATION_JSON_VALUE)
+  @GetMapping(path = DISCOVERY_PATH, produces = MediaType.APPLICATION_JSON_VALUE)
   public StdResponse<List<ToolDescriptor>> discoverTools() {
     return StdResponse.success("TOOLS", "能力发现成功", describeTools());
   }
 
-  @GetMapping(path = "/mcp/governance/audit/{requestId}", produces = MediaType.APPLICATION_JSON_VALUE)
+  @GetMapping(path = GOVERNANCE_PATH + "/{requestId}", produces = MediaType.APPLICATION_JSON_VALUE)
   public StdResponse<GovernanceReport> audit(@PathVariable("requestId") String requestId) {
     GovernanceReport report = auditService.findByRequestId(requestId);
     return StdResponse.success("AUDIT", "治理审计", report);
@@ -65,5 +72,16 @@ public class McpProtocolController {
     return toolRegistry.getHandlers().values().stream()
         .map(ToolHandler::describe)
         .collect(Collectors.toList());
+  }
+
+  private com.example.mcp.common.protocol.ProtocolDescriptor buildProtocolDescriptor() {
+    com.example.mcp.common.protocol.ProtocolDescriptor descriptor =
+        new com.example.mcp.common.protocol.ProtocolDescriptor();
+    descriptor.setSession(SESSION_PATH);
+    descriptor.setInvoke(INVOKE_PATH);
+    descriptor.setStream(STREAM_PATH);
+    descriptor.setDiscovery(DISCOVERY_PATH);
+    descriptor.setGovernance(GOVERNANCE_PATH);
+    return descriptor;
   }
 }

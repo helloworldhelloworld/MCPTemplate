@@ -5,6 +5,7 @@ import com.example.mcp.common.Envelopes.RequestEnvelope;
 import com.example.mcp.common.Envelopes.ResponseEnvelope;
 import com.example.mcp.common.StdResponse;
 import com.example.mcp.common.protocol.GovernanceReport;
+import com.example.mcp.common.protocol.ProtocolDescriptor;
 import com.example.mcp.common.protocol.SessionOpenRequest;
 import com.example.mcp.common.protocol.SessionOpenResponse;
 import com.example.mcp.common.protocol.ToolDescriptor;
@@ -16,13 +17,18 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.opentelemetry.api.trace.Span;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class McpClient {
   private static final String DEFAULT_INVOKE_PATH = "/mcp/invoke";
@@ -34,11 +40,13 @@ public class McpClient {
   private final String clientId;
   private final Transport transport;
   private final ObjectMapper objectMapper;
-  private final String invokePath;
-  private final String streamPath;
-  private final String sessionPath;
-  private final String discoveryPath;
-  private final String governancePath;
+  private volatile String invokePath;
+  private volatile String streamPath;
+  private volatile String sessionPath;
+  private volatile String discoveryPath;
+  private volatile String governancePath;
+  private volatile ProtocolDescriptor negotiatedProtocol;
+  private final Map<String, ToolDescriptor> toolCatalog = new ConcurrentHashMap<>();
 
   public McpClient(String clientId, Transport transport) {
     this(clientId, transport, new ObjectMapper());
@@ -116,7 +124,9 @@ public class McpClient {
         objectMapper
             .getTypeFactory()
             .constructParametricType(StdResponse.class, SessionOpenResponse.class);
-    return objectMapper.readValue(responseJson, stdType);
+    StdResponse<SessionOpenResponse> response = objectMapper.readValue(responseJson, stdType);
+    applySessionMetadata(response.getData());
+    return response;
   }
 
   public StdResponse<List<ToolDescriptor>> discoverTools() throws Exception {
@@ -126,7 +136,9 @@ public class McpClient {
             .getTypeFactory()
             .constructCollectionType(List.class, ToolDescriptor.class);
     JavaType stdType = objectMapper.getTypeFactory().constructParametricType(StdResponse.class, listType);
-    return objectMapper.readValue(responseJson, stdType);
+    StdResponse<List<ToolDescriptor>> response = objectMapper.readValue(responseJson, stdType);
+    cacheTools(response.getData());
+    return response;
   }
 
   public StdResponse<GovernanceReport> fetchGovernanceReport(String requestId) throws Exception {
@@ -213,6 +225,27 @@ public class McpClient {
     transport.getSse(defaultIfBlank(path, streamPath), onEvent);
   }
 
+  public Optional<ToolDescriptor> findTool(String toolName) {
+    if (toolName == null || toolName.isBlank()) {
+      return Optional.empty();
+    }
+    return Optional.ofNullable(toolCatalog.get(toolName));
+  }
+
+  public Optional<ToolDescriptor> findToolByCapability(String capability) {
+    if (capability == null || capability.isBlank()) {
+      return Optional.empty();
+    }
+    return toolCatalog.values().stream()
+        .filter(descriptor -> descriptor.getCapabilities() != null)
+        .filter(descriptor -> descriptor.getCapabilities().contains(capability))
+        .findFirst();
+  }
+
+  public List<ToolDescriptor> getCachedTools() {
+    return Collections.unmodifiableList(new ArrayList<>(toolCatalog.values()));
+  }
+
   private Context buildContext() {
     Context context = new Context();
     context.setClientId(clientId);
@@ -223,5 +256,32 @@ public class McpClient {
       context.setTraceId(span.getSpanContext().getTraceId());
     }
     return context;
+  }
+
+  private void applySessionMetadata(SessionOpenResponse session) {
+    if (session == null) {
+      return;
+    }
+    cacheTools(session.getTools());
+    ProtocolDescriptor descriptor = session.getProtocol();
+    if (descriptor != null) {
+      this.negotiatedProtocol = descriptor;
+      this.sessionPath = defaultIfBlank(descriptor.getSession(), this.sessionPath);
+      this.invokePath = defaultIfBlank(descriptor.getInvoke(), this.invokePath);
+      this.streamPath = defaultIfBlank(descriptor.getStream(), this.streamPath);
+      this.discoveryPath = defaultIfBlank(descriptor.getDiscovery(), this.discoveryPath);
+      this.governancePath = defaultIfBlank(descriptor.getGovernance(), this.governancePath);
+    }
+  }
+
+  private void cacheTools(List<ToolDescriptor> descriptors) {
+    if (descriptors == null || descriptors.isEmpty()) {
+      return;
+    }
+    for (ToolDescriptor descriptor : descriptors) {
+      if (descriptor != null && descriptor.getName() != null) {
+        toolCatalog.put(descriptor.getName(), descriptor);
+      }
+    }
   }
 }

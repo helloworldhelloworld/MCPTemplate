@@ -16,6 +16,7 @@ public class SessionOpenResponse implements Serializable {
   private String serverVersion;
   private OffsetDateTime expiresAt;
   private List<ToolDescriptor> tools = new ArrayList<>();
+  private ProtocolDescriptor protocol;
 
   public String getSessionId() {
     return sessionId;
@@ -55,5 +56,13 @@ public class SessionOpenResponse implements Serializable {
 
   public void setTools(List<ToolDescriptor> tools) {
     this.tools = tools == null ? new ArrayList<>() : new ArrayList<>(tools);
+  }
+
+  public ProtocolDescriptor getProtocol() {
+    return protocol;
+  }
+
+  public void setProtocol(ProtocolDescriptor protocol) {
+    this.protocol = protocol;
   }
 }

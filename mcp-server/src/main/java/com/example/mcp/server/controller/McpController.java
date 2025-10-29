@@ -42,7 +42,7 @@ public class McpController {
     this.auditService = auditService;
   }
 
-  @PostMapping(path = "/mcp/invoke", consumes = MediaType.APPLICATION_JSON_VALUE)
+  @PostMapping(path = McpProtocolController.INVOKE_PATH, consumes = MediaType.APPLICATION_JSON_VALUE)
   public ResponseEntity<?> invoke(
       @RequestBody RequestEnvelope requestEnvelope, HttpServletRequest httpRequest) {
     try {
@@ -94,7 +94,7 @@ public class McpController {
     }
   }
 
-  @GetMapping(path = "/mcp/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @GetMapping(path = McpProtocolController.STREAM_PATH, produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter streamEvents() {
     SseEmitter emitter = new SseEmitter();
     new Thread(
