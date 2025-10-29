@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VehicleStateResponse",
+  "type": "object",
+  "properties": {
+    "vin": {
+      "type": "string",
+      "description": "车辆 VIN 码"
+    },
+    "batteryLevel": {
+      "type": "number",
+      "description": "电量百分比",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "charging": {
+      "type": "boolean",
+      "description": "是否正在充电"
+    },
+    "location": {
+      "type": "string",
+      "description": "车辆位置"
+    }
+  },
+  "required": ["vin", "batteryLevel"],
+  "additionalProperties": false
+}

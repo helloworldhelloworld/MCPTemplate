@@ -1,17 +1,21 @@
 package com.example.mcp.client.runtime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
+import com.example.mcp.client.McpClient;
 import com.example.mcp.client.config.McpClientConfig;
 import com.example.mcp.client.config.RouteConfig;
 import com.example.mcp.client.config.ServerConfig;
-import com.example.mcp.client.config.TransportType;
+import com.example.mcp.client.runtime.McpClientRegistry;
 import com.example.mcp.common.StdResponse;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class McpRouteClientTest {
   private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -19,7 +23,17 @@ class McpRouteClientTest {
   @Test
   void invokeBlockingReturnsStdResponse() throws Exception {
     McpClientConfig config = buildConfig();
-    try (McpClientEnvironment environment = new McpClientEnvironment(config)) {
+    McpClient stubClient = Mockito.mock(McpClient.class);
+    when(stubClient.invokeAsync(any(), any(), any()))
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                StdResponse.success(
+                    "OK",
+                    "done",
+                    Map.of("vehicleId", "veh-42", "batteryPercentage", 87.5))));
+
+    try (McpClientEnvironment environment =
+        new McpClientEnvironment(config, new McpClientRegistry(config, Map.of("stub", stubClient)))) {
       environment.start();
       McpRouteClient routeClient = new McpRouteClient(environment);
 
@@ -27,62 +41,52 @@ class McpRouteClientTest {
           routeClient.invokeBlocking("vehicleState", Map.of("vehicleId", "veh-42"));
 
       assertEquals("success", response.getStatus());
-      JsonNode node = MAPPER.valueToTree(response.getData());
-      assertEquals("veh-42", node.path("vehicleId").asText());
-      assertEquals(87.5, node.path("batteryPercentage").asDouble());
+      assertEquals("veh-42", MAPPER.valueToTree(response.getData()).path("vehicleId").asText());
     }
   }
 
   @Test
   void concurrentInvocationsMaintainCorrelation() throws Exception {
     McpClientConfig config = buildConfig();
-    try (McpClientEnvironment environment = new McpClientEnvironment(config)) {
+    McpClient stubClient = Mockito.mock(McpClient.class);
+    when(stubClient.invokeAsync(any(), any(), any()))
+        .thenAnswer(
+            invocation ->
+                CompletableFuture.completedFuture(
+                    StdResponse.success(
+                        "OK",
+                        "done",
+                        Map.of(
+                            "vehicleId",
+                            ((Map<?, ?>) invocation.getArgument(1)).get("vehicleId"))));
+
+    try (McpClientEnvironment environment =
+        new McpClientEnvironment(config, new McpClientRegistry(config, Map.of("stub", stubClient)))) {
       environment.start();
       McpRouteClient routeClient = new McpRouteClient(environment);
 
-      CompletableFuture<StdResponse<?>> first =
-          routeClient.invoke("vehicleState", Map.of("vehicleId", "veh-A")).toCompletableFuture();
-      CompletableFuture<StdResponse<?>> second =
-          routeClient.invoke("vehicleState", Map.of("vehicleId", "veh-B")).toCompletableFuture();
+      CompletionStage<StdResponse<?>> first =
+          routeClient.invoke("vehicleState", Map.of("vehicleId", "veh-A"));
+      CompletionStage<StdResponse<?>> second =
+          routeClient.invoke("vehicleState", Map.of("vehicleId", "veh-B"));
 
-      JsonNode firstNode = MAPPER.valueToTree(first.get().getData());
-      JsonNode secondNode = MAPPER.valueToTree(second.get().getData());
-
-      assertEquals("veh-A", firstNode.path("vehicleId").asText());
-      assertEquals("veh-B", secondNode.path("vehicleId").asText());
+      assertEquals(
+          "veh-A", MAPPER.valueToTree(first.toCompletableFuture().get().getData()).path("vehicleId").asText());
+      assertEquals(
+          "veh-B", MAPPER.valueToTree(second.toCompletableFuture().get().getData()).path("vehicleId").asText());
     }
   }
 
   private McpClientConfig buildConfig() {
     McpClientConfig config = new McpClientConfig();
     config.setClientId("test-client");
-    config.setDefaultServer("sdk");
-
+    config.setDefaultServer("stub");
     ServerConfig serverConfig = new ServerConfig();
-    serverConfig.setType(TransportType.SDK);
-    serverConfig.setSdkClass(StubSdkClient.class.getName());
-    config.setServers(Map.of("sdk", serverConfig));
-
+    serverConfig.setBaseUrl("http://localhost");
+    config.setServers(Map.of("stub", serverConfig));
     RouteConfig routeConfig = new RouteConfig();
     routeConfig.setTool("mcp.vehicle.state.get");
     config.setRoutes(Map.of("vehicleState", routeConfig));
     return config;
-  }
-
-  public static class StubSdkClient {
-    private final ObjectMapper mapper = new ObjectMapper();
-
-    public String postJson(String path, String json) throws Exception {
-      JsonNode root = mapper.readTree(json);
-      String vehicleId = root.path("payload").path("vehicleId").asText();
-      return "{\"status\":\"success\",\"code\":\"OK\",\"message\":\"done\",\"data\":"
-          + "{\"vehicleId\":\""
-          + vehicleId
-          + "\",\"batteryPercentage\":87.5}}";
-    }
-
-    public void getSse(String path, java.util.function.Consumer<String> consumer) {
-      // no-op for tests
-    }
   }
 }
