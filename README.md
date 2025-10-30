@@ -2,16 +2,33 @@
 
 MCP 模板仓库演示模型客户端与工具服务端之间的全链路协议协作方式，重点展示如何通过统一的协议分层，把翻译、车控等工具接入流程标准化并保持可治理。
 
+> **说明**：为便于在无法访问外部依赖的环境中编译和运行，仓库当前提供一个纯 Java 的离线示例。示例实现了“翻译”“知识问答”“车控”“语音转写”四类工具能力，客户端与内存版 MCP Server 完成会话建立、能力发现、调用执行与治理上报的完整闭环。
+
 ## 项目概览
-- **mcp-common**：沉淀 `Context`、`StdResponse`、各类 Envelope 等共享契约，保证所有工具复用同一套协议对象。
-- **mcp-server**：基于 Spring Boot 的工具服务端，承载翻译、车控等具体能力实现，负责遵循协议响应模型。
-- **mcp-client**：模型侧客户端运行时，提供会话管理、工具发现、调用编排与观测数据汇聚。
+本模板为了便于在离线环境中演示协议协作，仅保留纯 Java 实现：
+
+- **核心示例代码（`src/main/java`）**：
+  - `com.example.mcp.common`：承载上下文、标准响应、请求/响应 Envelope 以及工具契约对象。
+  - `com.example.mcp.server`：实现内存版 `McpServer`，内置翻译、问答、车控、语音转写等工具以及治理报表。
+  - `com.example.mcp.client`：封装 `McpClient` 与 `ClientApplication`，展示会话、能力发现及多轮调用流程。
 - **schema**：维护与协议对齐的 JSON Schema，供客户端做静态校验与 UI 生成。
 
 ## 环境要求
-- 安装 JDK 17，并确保 `JAVA_HOME` 指向对应安装目录（Spring Boot 3.2 及 Maven 编译均依赖 Java 17）。
-- Maven 3.9.0 或以上版本，便于统一插件版本与构建链路。
-- 推荐使用 `mvn -v` 验证工具链是否命中正确的 JDK，再执行 `mvn clean package` 等构建命令。
+- 安装 JDK 17，并确保 `JAVA_HOME` 指向对应安装目录。
+- 本仓库提供 `build.sh` 脚本，直接使用 `javac` 进行编译，无需额外的构建工具。
+
+### 快速编译与运行
+
+```bash
+./build.sh
+```
+
+脚本会在 `target/` 目录下生成 `mcp-template.jar`，并自动运行 `ClientApplication`。终端会依次展示：
+
+1. 会话建立后的欢迎语；
+2. 可用工具清单及各自简介；
+3. 依次调用翻译、知识问答、车控、语音转写工具的结果与用量统计；
+4. 服务器治理快照，显示最近一次调用的观测数据。
 
 ## 与官方架构的对齐
 根据 [Model Context Protocol 官方架构说明](https://modelcontextprotocol.io/docs/learn/architecture)，MCP 的交互主体由**模型侧的 Host** 与**工具侧的 Server** 组成，二者通过统一的 Transport 建立长连接，围绕上下文协商、能力发布、调用编排与运行治理开展协作。本仓库的模块可映射到官方术语如下：
