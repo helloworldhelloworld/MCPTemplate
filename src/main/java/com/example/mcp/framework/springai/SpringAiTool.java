@@ -22,9 +22,13 @@ public abstract class SpringAiTool<I, O> implements ToolHandler<I, O> {
 
     protected abstract StdResponse<O> mapToResponse(String modelResponse, Context context, I input);
 
-    @Override
-    public StdResponse<O> handle(Context context, I input) {
+    protected StdResponse<O> execute(Context context, I input) {
         String result = springAiService.chat(systemPrompt(context, input), userPrompt(context, input));
         return mapToResponse(result, context, input);
+    }
+
+    @Override
+    public StdResponse<O> handle(Context context, I input) {
+        return execute(context, input);
     }
 }
