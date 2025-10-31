@@ -4,7 +4,7 @@ import com.example.mcp.common.Context;
 import com.example.mcp.common.StdResponse;
 import com.example.mcp.common.vehicle.VehicleStateRequest;
 import com.example.mcp.common.vehicle.VehicleStateResponse;
-import com.example.mcp.server.ToolHandler;
+import com.example.mcp.framework.api.ToolHandler;
 import java.util.HashMap;
 import java.util.Map;
 

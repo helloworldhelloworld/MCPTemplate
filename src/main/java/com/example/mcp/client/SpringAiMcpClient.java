@@ -14,22 +14,24 @@ import com.example.mcp.common.translation.TranslationRequest;
 import com.example.mcp.common.translation.TranslationResponse;
 import com.example.mcp.common.vehicle.VehicleStateRequest;
 import com.example.mcp.common.vehicle.VehicleStateResponse;
-import com.example.mcp.server.McpServer;
+import com.example.mcp.framework.api.McpClient;
+import com.example.mcp.framework.api.McpServer;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-public final class McpClient {
+public final class SpringAiMcpClient implements McpClient {
 
     private final McpServer server;
     private final String clientId;
     private Context sessionContext;
 
-    public McpClient(McpServer server, String clientId) {
+    public SpringAiMcpClient(McpServer server, String clientId) {
         this.server = Objects.requireNonNull(server, "server must not be null");
         this.clientId = Objects.requireNonNull(clientId, "clientId must not be null");
     }
 
+    @Override
     public SessionOpenResponse openSession(String locale) {
         SessionOpenRequest request = new SessionOpenRequest();
         request.setClientId(clientId);
@@ -40,10 +42,12 @@ public final class McpClient {
         return response;
     }
 
+    @Override
     public List<ToolDescriptor> listTools() {
         return server.listTools();
     }
 
+    @Override
     public Optional<ToolDescriptor> describeTool(String name) {
         return server.describeTool(name);
     }
@@ -72,16 +76,18 @@ public final class McpClient {
         return server.governanceReport();
     }
 
+    @Override
     public Context getSessionContext() {
         return sessionContext;
     }
 
-    private <I, O> Envelopes.ResponseEnvelope<O> invoke(String tool, I payload, Class<O> responseType) {
+    @Override
+    public <I, O> Envelopes.ResponseEnvelope<O> invoke(String toolName, I payload, Class<O> responseType) {
         if (sessionContext == null) {
             throw new IllegalStateException("Session has not been opened");
         }
         Context context = sessionContext.copy();
-        Envelopes.RequestEnvelope<I> request = new Envelopes.RequestEnvelope<>(tool, context, payload);
+        Envelopes.RequestEnvelope<I> request = new Envelopes.RequestEnvelope<>(toolName, context, payload);
         Envelopes.ResponseEnvelope<O> response = server.invoke(request, responseType);
         this.sessionContext = response.getContext().copy();
         return response;

@@ -4,7 +4,7 @@ import com.example.mcp.common.Context;
 import com.example.mcp.common.StdResponse;
 import com.example.mcp.common.qa.QaRequest;
 import com.example.mcp.common.qa.QaResponse;
-import com.example.mcp.server.ToolHandler;
+import com.example.mcp.framework.api.ToolHandler;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;

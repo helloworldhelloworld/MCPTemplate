@@ -3,6 +3,7 @@ package com.example.mcp.server;
 import com.example.mcp.common.Message;
 import com.example.mcp.common.protocol.GovernanceReport;
 import com.example.mcp.common.protocol.InvocationAuditRecord;
+import com.example.mcp.framework.api.McpServer;
 import java.time.Instant;
 import java.util.Objects;
 
