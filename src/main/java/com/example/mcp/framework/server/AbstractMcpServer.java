@@ -24,6 +24,37 @@ public abstract class AbstractMcpServer implements McpServer {
 
     private final Map<String, ToolRegistration<?, ?>> registrations = new HashMap<>();
     private final GovernanceReport governanceReport = new GovernanceReport();
+    private final List<McpServerInterceptor> interceptors = new ArrayList<>();
+    protected final McpServerConfig config;
+
+    protected AbstractMcpServer() {
+        this(new McpServerConfig());
+    }
+
+    protected AbstractMcpServer(McpServerConfig config) {
+        this.config = Objects.requireNonNull(config, "config must not be null");
+    }
+
+    /**
+     * 添加拦截器
+     */
+    public void addInterceptor(McpServerInterceptor interceptor) {
+        interceptors.add(Objects.requireNonNull(interceptor, "interceptor must not be null"));
+    }
+
+    /**
+     * 移除拦截器
+     */
+    public void removeInterceptor(McpServerInterceptor interceptor) {
+        interceptors.remove(interceptor);
+    }
+
+    /**
+     * 获取配置
+     */
+    public McpServerConfig getConfig() {
+        return config;
+    }
 
     @Override
     public SessionOpenResponse openSession(SessionOpenRequest request) {
@@ -82,8 +113,36 @@ public abstract class AbstractMcpServer implements McpServer {
 
         Context invocationContext = request.getContext().copy();
         invocationContext.setRequestId(UUID.randomUUID().toString());
+
+        // 执行前置拦截器
+        for (McpServerInterceptor interceptor : interceptors) {
+            try {
+                if (!interceptor.beforeHandle(request.getTool(), invocationContext, request.getPayload())) {
+                    StdResponse<O> response = StdResponse.error("interceptor_rejected", "请求被拦截器拒绝");
+                    return new Envelopes.ResponseEnvelope<>(request.getTool(), invocationContext, response, null);
+                }
+            } catch (Exception e) {
+                System.err.println("[MCP-SERVER] 拦截器前置处理失败: " + e.getMessage());
+            }
+        }
+
         long start = System.currentTimeMillis();
-        StdResponse<O> response = registration.handler().handle(invocationContext, request.getPayload());
+        StdResponse<O> response;
+
+        try {
+            response = registration.handler().handle(invocationContext, request.getPayload());
+        } catch (Exception e) {
+            // 执行错误拦截器
+            for (McpServerInterceptor interceptor : interceptors) {
+                try {
+                    interceptor.onError(request.getTool(), invocationContext, request.getPayload(), e);
+                } catch (Exception ie) {
+                    System.err.println("[MCP-SERVER] 拦截器错误处理失败: " + ie.getMessage());
+                }
+            }
+            response = StdResponse.error("handler_error", "处理失败: " + e.getMessage());
+        }
+
         long latency = System.currentTimeMillis() - start;
         invocationContext.getUsage().setLatencyMs(latency);
         invocationContext.getUsage().setInputTokens(invocationContext.getUsage().getInputTokens() + request.getPayload().toString().length());
@@ -91,8 +150,20 @@ public abstract class AbstractMcpServer implements McpServer {
         if (data != null) {
             invocationContext.getUsage().setOutputTokens(invocationContext.getUsage().getOutputTokens() + data.toString().length());
         }
-        governanceReport.addRecord(new InvocationAuditRecord(invocationContext.getRequestId(), request.getTool(),
-                response.getStatus(), latency, Instant.now()));
+
+        // 执行后置拦截器
+        for (McpServerInterceptor interceptor : interceptors) {
+            try {
+                interceptor.afterHandle(request.getTool(), invocationContext, request.getPayload(), response);
+            } catch (Exception e) {
+                System.err.println("[MCP-SERVER] 拦截器后置处理失败: " + e.getMessage());
+            }
+        }
+
+        if (config.isEnableAudit()) {
+            governanceReport.addRecord(new InvocationAuditRecord(invocationContext.getRequestId(), request.getTool(),
+                    response.getStatus(), latency, Instant.now()));
+        }
         Envelopes.UiCard card = buildUiCard(request.getTool(), response);
         return new Envelopes.ResponseEnvelope<>(request.getTool(), invocationContext, response, card);
     }
