@@ -43,13 +43,6 @@ public abstract class AbstractMcpServer implements McpServer {
     }
 
     /**
-     * 移除拦截器
-     */
-    public void removeInterceptor(McpServerInterceptor interceptor) {
-        interceptors.remove(interceptor);
-    }
-
-    /**
      * 获取配置
      */
     public McpServerConfig getConfig() {

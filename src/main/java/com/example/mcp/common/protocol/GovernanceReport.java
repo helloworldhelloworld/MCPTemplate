@@ -18,10 +18,6 @@ public final class GovernanceReport {
         return Collections.unmodifiableList(records);
     }
 
-    public long countByTool(String toolName) {
-        return records.stream().filter(record -> record.getTool().equals(toolName)).count();
-    }
-
     @Override
     public String toString() {
         return "GovernanceReport{" +

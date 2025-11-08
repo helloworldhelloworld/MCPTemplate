@@ -36,12 +36,10 @@ public class RateLimitInterceptor implements McpServerInterceptor {
 
     @Override
     public <I, O> void afterHandle(String toolName, Context context, I payload, StdResponse<O> response) {
-        // 不需要处理
     }
 
     @Override
     public <I> void onError(String toolName, Context context, I payload, Exception exception) {
-        // 不需要处理
     }
 
     private static class RateLimiter {
