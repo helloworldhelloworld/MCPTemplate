@@ -23,18 +23,6 @@ public class SecurityInterceptor implements McpServerInterceptor {
         enableWhitelist = true;
     }
 
-    public void addBlockedClient(String clientId) {
-        blockedClients.add(clientId);
-    }
-
-    public void removeAllowedClient(String clientId) {
-        allowedClients.remove(clientId);
-    }
-
-    public void removeBlockedClient(String clientId) {
-        blockedClients.remove(clientId);
-    }
-
     @Override
     public <I> boolean beforeHandle(String toolName, Context context, I payload) {
         String clientId = context.getClientId();
@@ -56,11 +44,9 @@ public class SecurityInterceptor implements McpServerInterceptor {
 
     @Override
     public <I, O> void afterHandle(String toolName, Context context, I payload, StdResponse<O> response) {
-        // 可以在这里记录访问日志
     }
 
     @Override
     public <I> void onError(String toolName, Context context, I payload, Exception exception) {
-        // 可以在这里记录安全事件
     }
 }

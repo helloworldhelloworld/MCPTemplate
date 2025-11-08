@@ -50,13 +50,6 @@ public class EnhancedMcpClient implements McpClient {
     }
 
     /**
-     * 移除拦截器
-     */
-    public void removeInterceptor(McpClientInterceptor interceptor) {
-        interceptors.remove(interceptor);
-    }
-
-    /**
      * 获取配置
      */
     public McpClientConfig getConfig() {

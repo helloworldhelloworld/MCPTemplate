@@ -18,7 +18,6 @@ public final class Envelopes {
         private final String tool;
         private final Context context;
         private final T payload;
-        private final Map<String, String> attachments = new HashMap<>();
 
         public RequestEnvelope(String tool, Context context, T payload) {
             this.tool = Objects.requireNonNull(tool, "tool must not be null");
@@ -38,17 +37,12 @@ public final class Envelopes {
             return payload;
         }
 
-        public Map<String, String> getAttachments() {
-            return attachments;
-        }
-
         @Override
         public String toString() {
             return "RequestEnvelope{" +
                     "tool='" + tool + '\'' +
                     ", context=" + context +
                     ", payload=" + payload +
-                    ", attachments=" + attachments +
                     '}';
         }
     }

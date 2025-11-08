@@ -24,9 +24,8 @@ public class EnhancedFrameworkDemo {
         System.out.println("=== MCP 增强框架示例 ===\n");
 
         // 1. 创建配置化的服务器
-        McpServerConfig serverConfig = new McpServerConfig("demo-server");
+        McpServerConfig serverConfig = new McpServerConfig();
         serverConfig.setEnableAudit(true);
-        serverConfig.setEnableMetrics(true);
 
         DemoServer server = new DemoServer(serverConfig);
 
@@ -77,11 +76,7 @@ public class EnhancedFrameworkDemo {
         var upperResponse = client.invoke("uppercase", new TextRequest("hello world"), TextResult.class);
         printResponse("大写转换", upperResponse);
 
-        // 8. 获取指标信息
-        System.out.println("\n4. 客户端指标:");
-        client.getConfig();
-
-        // 9. 关闭会话
+        // 8. 关闭会话
         client.closeSession();
         System.out.println("\n会话已关闭");
     }

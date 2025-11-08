@@ -40,14 +40,6 @@ public class MetricsInterceptor implements McpClientInterceptor {
         }
     }
 
-    public ToolMetrics getMetrics(String toolName) {
-        return metricsMap.get(toolName);
-    }
-
-    public ConcurrentHashMap<String, ToolMetrics> getAllMetrics() {
-        return metricsMap;
-    }
-
     public static class ToolMetrics {
         private final AtomicLong totalCalls = new AtomicLong(0);
         private final AtomicLong successCalls = new AtomicLong(0);
